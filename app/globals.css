@@ -180,7 +180,10 @@ details.obj p { margin: 8px 0 0; color: var(--ink-2); }
 .settings h1 { font-family: var(--display); font-size: 56px; margin: 0 0 8px; font-weight: 800; line-height: 1; }
 .settings > p { color: var(--ink-2); margin-top: 0; }
 
-/* Leaflet dans les deux thèmes */
+/* Leaflet dans les deux thèmes : fond de carte assombri en mode sombre */
+@media (prefers-color-scheme: dark) {
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6); }
+}
 .leaflet-container { background: var(--sheet); font-family: var(--text); }
 .leaflet-popup-content { font-family: var(--text); }
 

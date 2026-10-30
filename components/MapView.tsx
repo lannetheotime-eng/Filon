@@ -26,11 +26,10 @@ export default function MapView({
     import("leaflet").then((mod) => {
       if (cancelled || !el.current || map.current) return;
       L.current = mod;
-      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       map.current = mod.map(el.current, { zoomControl: true, scrollWheelZoom: false }).setView(center, 13);
       mod
-        .tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`, {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
+        .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19,
         })
         .addTo(map.current);
