@@ -107,7 +107,7 @@ export default function Home() {
   return (
     <>
       <nav className="top">
-        <div className="logo"><i aria-hidden />Filon</div>
+        <div className="logo"><i aria-hidden />Filon<small>par Thot Studio</small></div>
         <div className="tabs">
           <button className="tab" aria-current={view === "scan" ? "page" : undefined} onClick={() => setView("scan")}>Scanner</button>
           <button className="tab" aria-current={view === "pipeline" ? "page" : undefined} onClick={() => setView("pipeline")}>
