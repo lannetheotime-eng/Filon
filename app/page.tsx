@@ -1,16 +1,19 @@
 "use client";
-import { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { TRADES, getTrade } from "../lib/trades";
-import type { Lead, PipelineEntry, Profile, ScanResult, Stage } from "../lib/types";
-import { DEFAULT_PROFILE } from "../lib/types";
+import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } from "../lib/types";
+import { DEFAULT_PROFILE, PRESENCE_LABEL } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
+import Dashboard from "../components/Dashboard";
+import { IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
 
 const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loading: () => <div className="map" /> });
 
-type View = "scan" | "pipeline" | "reglages";
+type View = "scan" | "pipeline" | "bilan" | "reglages";
+type Recent = { city: string; tradeId: string; at: string };
 
 function Score({ value }: { value: number }) {
   const r = 20, c = 2 * Math.PI * r;
@@ -25,11 +28,21 @@ function Score({ value }: { value: number }) {
   );
 }
 
+// Itinéraire Google Maps : départ depuis la position actuelle, jusqu'à 10 arrêts
+function routeUrl(stops: Lead[]) {
+  const s = stops.slice(0, 10).map((l) => encodeURIComponent(l.address));
+  const dest = s[s.length - 1];
+  const way = s.slice(0, -1).join("%7C");
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}${way ? `&waypoints=${way}` : ""}&travelmode=driving`;
+}
+
 export default function Home() {
   const [view, setView] = useState<View>("scan");
   const [tradeId, setTradeId] = usePersistent("filon.trade", "boulangerie");
   const [city, setCity] = usePersistent("filon.city", "Toulouse");
   const [deep, setDeep] = usePersistent("filon.deep", false);
+  const [includeOld, setIncludeOld] = usePersistent("filon.old", true);
+  const [recent, setRecent] = usePersistent<Recent[]>("filon.recent", []);
   const [result, setResult] = usePersistent<ScanResult | null>("filon.last", null);
   const [leads, setLeads] = usePersistent<Record<string, Lead>>("filon.leads", {});
   const [pipeline, setPipeline] = usePersistent<Record<string, PipelineEntry>>("filon.pipeline", {});
@@ -39,25 +52,31 @@ export default function Home() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [minRating, setMinRating] = useState(0);
   const [minReviews, setMinReviews] = useState(0);
-  const [withSocial, setWithSocial] = useState(true);
+  const [kind, setKind] = useState<WebPresence | "all">("all");
+  const [mobileView, setMobileView] = useState<"list" | "map">("list");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirmReset, setConfirmReset] = useState(false);
 
-  async function runScan() {
+  async function runScan(c = city, t = tradeId) {
     setLoading(true);
     setError("");
+    setSelected([]);
     try {
       const r = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city, tradeId, deep }),
+        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setResult(j);
+      setKind("all");
       setLeads((prev) => {
         const next = { ...prev };
         for (const l of j.leads as Lead[]) next[l.id] = l;
         return next;
       });
+      setRecent((prev) => [{ city: j.city.name, tradeId: t, at: new Date().toISOString() }, ...prev.filter((x) => !(x.city === j.city.name && x.tradeId === t))].slice(0, 6));
     } catch (e: any) {
       setError(e.message || "Le scan a échoué.");
     } finally {
@@ -65,12 +84,18 @@ export default function Home() {
     }
   }
 
+  const counts = useMemo(() => {
+    const c = { all: 0, aucun: 0, reseaux: 0, vieux: 0 } as Record<WebPresence | "all", number>;
+    for (const l of result?.leads || []) { c.all++; c[l.presence]++; }
+    return c;
+  }, [result]);
+
   const shown = useMemo(() => {
     if (!result) return [];
     return result.leads.filter(
-      (l) => (l.rating || 0) >= minRating && (l.reviews || 0) >= minReviews && (withSocial || l.presence === "aucun")
+      (l) => (l.rating || 0) >= minRating && (l.reviews || 0) >= minReviews && (kind === "all" || l.presence === kind)
     );
-  }, [result, minRating, minReviews, withSocial]);
+  }, [result, minRating, minReviews, kind]);
 
   const updatePipeline = useCallback(
     (id: string, patch: Partial<PipelineEntry> | null) => {
@@ -84,8 +109,12 @@ export default function Home() {
     [setPipeline]
   );
 
-  function addAll() {
-    for (const l of shown) if (!pipeline[l.id]) updatePipeline(l.id, { stage: "a_contacter" });
+  function addMany(ids: string[]) {
+    for (const id of ids) if (!pipeline[id]) updatePipeline(id, { stage: "a_contacter" });
+  }
+
+  function toggle(id: string) {
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length >= 10 ? s : [...s, id]));
   }
 
   function exportScan() {
@@ -94,8 +123,9 @@ export default function Home() {
     download(
       `${t.id}-${result.city.name}.csv`.toLowerCase(),
       toCsv(shown.map((l) => ({
-        Nom: l.name, Adresse: l.address, Téléphone: l.phone || "", Note: l.rating ?? "", Avis: l.reviews ?? "",
-        Présence: l.presence === "aucun" ? "Aucun site" : "Réseaux seulement", Score: l.score, "Fiche Google": l.mapsUrl || "",
+        Nom: l.name, Adresse: l.address, Téléphone: l.phone || "", "E-mail": l.audit?.email || "", Note: l.rating ?? "", Avis: l.reviews ?? "",
+        Situation: PRESENCE_LABEL[l.presence], "Site actuel": l.website || "", "Défauts du site": (l.audit?.issues || []).join(" / "),
+        Score: l.score, "Fiche Google": l.mapsUrl || "",
       })))
     );
   }
@@ -103,20 +133,28 @@ export default function Home() {
   const openLead = openId ? leads[openId] : null;
   const trade = getTrade(result?.tradeId || tradeId)!;
   const pipelineCount = Object.keys(pipeline).length;
+  const selLeads = selected.map((id) => leads[id]).filter(Boolean);
+
+  const NAV: [View, string, () => React.ReactElement][] = [
+    ["scan", "Scanner", IconScan],
+    ["pipeline", "Pipeline", IconBoard],
+    ["bilan", "Bilan", IconStats],
+    ["reglages", "Réglages", IconSettings],
+  ];
 
   return (
     <>
       <nav className="top">
         <div className="logo"><i aria-hidden />Filon<small>par Thot Studio</small></div>
         <div className="tabs">
-          <button className="tab" aria-current={view === "scan" ? "page" : undefined} onClick={() => setView("scan")}>Scanner</button>
-          <button className="tab" aria-current={view === "pipeline" ? "page" : undefined} onClick={() => setView("pipeline")}>
-            Pipeline{pipelineCount > 0 && <b>{pipelineCount}</b>}
-          </button>
-          <button className="tab" aria-current={view === "reglages" ? "page" : undefined} onClick={() => setView("reglages")}>Réglages</button>
+          {NAV.map(([id, label]) => (
+            <button key={id} className="tab" aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>
+              {label}{id === "pipeline" && pipelineCount > 0 && <b>{pipelineCount}</b>}
+            </button>
+          ))}
         </div>
         <div className="spacer" />
-        {result?.demo && <span className="demo">Mode démo : données fictives tant que la clé Google n'est pas configurée</span>}
+        {result?.demo && <span className="demo">Mode démo : données fictives</span>}
       </nav>
 
       {view === "scan" && (
@@ -129,78 +167,111 @@ export default function Home() {
                 {TRADES.map((t) => <option key={t.id} value={t.id}>{t.label.toLowerCase()}</option>)}
               </select>
             </span>
-            <span className="mark">sans site</span>
+            <span className="mark">{includeOld ? "sans site, ou avec un site à refaire," : "sans site"}</span>
             <span className="fixed">à</span>
             <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="ville" aria-label="Ville ou code postal" size={Math.max(6, city.length)} />
           </form>
+
           <div className="run">
-            <button className="btn" onClick={runScan} disabled={loading || !city.trim()}>
-              {loading ? "Scan en cours…" : "Scanner la ville"}
+            <button className="btn big" onClick={() => runScan()} disabled={loading || !city.trim()}>
+              {loading ? (includeOld ? "Scan et analyse des sites…" : "Scan en cours…") : "Scanner la ville"}
             </button>
-            <label className="check">
+            <label className="switch">
+              <input type="checkbox" checked={includeOld} onChange={(e) => setIncludeOld(e.target.checked)} />
+              <span aria-hidden />
+              Analyser les sites existants
+            </label>
+            <label className="switch">
               <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} />
-              Scan complet (quadrille la ville, plus de résultats, plus de requêtes)
+              <span aria-hidden />
+              Scan complet de la ville
             </label>
             {error && <span className="error">{error}</span>}
           </div>
+
+          {recent.length > 0 && (
+            <div className="recent">
+              <span className="hint">Récents</span>
+              {recent.map((r) => (
+                <button key={r.city + r.tradeId} className="chip" onClick={() => { setCity(r.city); setTradeId(r.tradeId); runScan(r.city, r.tradeId); }} disabled={loading}>
+                  {getTrade(r.tradeId)?.label} · {r.city}
+                </button>
+              ))}
+            </div>
+          )}
 
           {result && (
             <section className="results">
               <div className="headline">
                 <span className="n">{result.leads.length}</span>
-                <p>
-                  {trade.label.toLowerCase()} sans site à {result.city.name} ({result.city.dept}), sur {result.scanned} fiches Google analysées.
-                  {result.withSite > 0 && ` ${result.withSite} ont déjà un site et sont écartées.`}
-                  {!result.demo && ` ${result.calls} requête${result.calls > 1 ? "s" : ""} Google.`}
-                </p>
+                <div>
+                  <p className="big">prospects pour {trade.label.toLowerCase()} à {result.city.name}</p>
+                  <p>
+                    {result.scanned} fiches Google analysées{result.audited ? `, dont ${result.audited} sites passés au crible` : ""}.
+                    {result.withSite > 0 && ` ${result.withSite} ont un site correct et sont écartées.`}
+                    {!result.demo && ` ${result.calls} requête${result.calls > 1 ? "s" : ""} Google.`}
+                  </p>
+                </div>
               </div>
 
-              <div className="split">
-                <MapView leads={shown} center={[result.city.lat, result.city.lng]} activeId={openId || undefined} onSelect={setOpenId} />
-                <div>
-                  <div className="filters">
-                    <label>Note min.{" "}
-                      <select value={minRating} onChange={(e) => setMinRating(+e.target.value)}>
-                        {[0, 3.5, 4, 4.5].map((v) => <option key={v} value={v}>{v ? `${String(v).replace(".", ",")}+` : "Toutes"}</option>)}
-                      </select>
-                    </label>
-                    <label>Avis min.{" "}
-                      <select value={minReviews} onChange={(e) => setMinReviews(+e.target.value)}>
-                        {[0, 5, 10, 30, 100].map((v) => <option key={v} value={v}>{v ? `${v}+` : "Tous"}</option>)}
-                      </select>
-                    </label>
-                    <label className="check">
-                      <input type="checkbox" checked={withSocial} onChange={(e) => setWithSocial(e.target.checked)} />
-                      Inclure les « réseaux seulement »
-                    </label>
-                    <span className="spacer" style={{ flex: 1 }} />
-                    <button className="btn ghost small" onClick={addAll} disabled={!shown.length}>Tout ajouter au pipeline</button>
-                    <button className="btn ghost small" onClick={exportScan} disabled={!shown.length}>CSV</button>
-                  </div>
+              <div className="segments" role="tablist" aria-label="Type de prospect">
+                {(["all", "aucun", "reseaux", "vieux"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
+                  <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)}>
+                    {k === "all" ? "Tous" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
+                  </button>
+                ))}
+              </div>
 
+              <div className="filters">
+                <label>Note min.{" "}
+                  <select value={minRating} onChange={(e) => setMinRating(+e.target.value)}>
+                    {[0, 3.5, 4, 4.5].map((v) => <option key={v} value={v}>{v ? `${String(v).replace(".", ",")}+` : "Toutes"}</option>)}
+                  </select>
+                </label>
+                <label>Avis min.{" "}
+                  <select value={minReviews} onChange={(e) => setMinReviews(+e.target.value)}>
+                    {[0, 5, 10, 30, 100].map((v) => <option key={v} value={v}>{v ? `${v}+` : "Tous"}</option>)}
+                  </select>
+                </label>
+                <span style={{ flex: 1 }} />
+                <button className="btn ghost small" onClick={() => addMany(shown.map((l) => l.id))} disabled={!shown.length}>Tout ajouter au pipeline</button>
+                <button className="btn ghost small" onClick={exportScan} disabled={!shown.length}>CSV</button>
+                <div className="toggle-view" role="group" aria-label="Affichage">
+                  <button aria-pressed={mobileView === "list"} onClick={() => setMobileView("list")}><IconList /> Liste</button>
+                  <button aria-pressed={mobileView === "map"} onClick={() => setMobileView("map")}><IconMap /> Carte</button>
+                </div>
+              </div>
+
+              <div className="split" data-mobile={mobileView}>
+                <MapView leads={shown} center={[result.city.lat, result.city.lng]} activeId={openId || undefined} onSelect={setOpenId} />
+                <div className="list-col">
                   {shown.length ? (
                     <ul className="list">
                       {shown.map((l) => {
                         const inPipe = pipeline[l.id];
+                        const isSel = selected.includes(l.id);
                         return (
-                          <li key={l.id} className="row" data-active={openId === l.id} onClick={() => setOpenId(l.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setOpenId(l.id)}>
-                            <Score value={l.score} />
-                            <div>
-                              <h3>{l.name}</h3>
-                              <div className="meta">
-                                <span>{l.address.replace(/, France$/, "")}</span>
-                                {l.phone && <span>{l.phone}</span>}
-                                {l.rating && <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span>}
+                          <li key={l.id} className="row" data-active={openId === l.id} data-kind={l.presence}>
+                            <label className="sel" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox" checked={isSel} onChange={() => toggle(l.id)} aria-label={`Sélectionner ${l.name} pour la tournée`} />
+                            </label>
+                            <button className="row-main" onClick={() => setOpenId(l.id)}>
+                              <Score value={l.score} />
+                              <div className="row-text">
+                                <h3>{l.name}</h3>
+                                <div className="meta">
+                                  <span>{l.address.replace(/, France$/, "")}</span>
+                                  {l.rating && <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span>}
+                                </div>
+                                {l.audit && <div className="issues">{l.audit.issues.slice(0, 3).join(" · ")}</div>}
                               </div>
-                            </div>
+                            </button>
                             <div className="side">
-                              <span className={`tag ${l.presence === "aucun" ? "none" : "soc"}`}>{l.presence === "aucun" ? "Aucun site" : "Réseaux"}</span>
+                              <span className={`tag ${l.presence}`}>{PRESENCE_LABEL[l.presence]}</span>
                               {inPipe ? (
                                 <span className="tag in">Suivi</span>
                               ) : (
-                                <button className="btn ghost small" onClick={(e) => { e.stopPropagation(); updatePipeline(l.id, { stage: "a_contacter" }); }}>
-                                  Ajouter
-                                </button>
+                                <button className="btn ghost small" onClick={() => updatePipeline(l.id, { stage: "a_contacter" })}>Ajouter</button>
                               )}
                             </div>
                           </li>
@@ -220,22 +291,35 @@ export default function Home() {
 
           {!result && !loading && (
             <section className="results">
-              <div className="headline">
-                <p>Choisis un métier et une ville. Filon liste les entreprises qui n'ont pas de site, avec leur téléphone, leur note Google et un score pour savoir qui appeler en premier.</p>
+              <div className="intro">
+                <div><b>1</b><p>Choisis un métier et une ville.</p></div>
+                <div><b>2</b><p>Filon trouve les entreprises sans site, ou dont le site est dépassé.</p></div>
+                <div><b>3</b><p>Tu les contactes avec un e-mail prêt, ou tu passes les voir avec une maquette.</p></div>
               </div>
             </section>
+          )}
+
+          {selected.length > 0 && (
+            <div className="selbar" role="region" aria-label="Sélection">
+              <span><b>{selected.length}</b> sélectionnée{selected.length > 1 ? "s" : ""}{selected.length >= 10 ? " (maximum)" : ""}</span>
+              <a className="btn small" href={routeUrl(selLeads)} target="_blank" rel="noreferrer"><IconRoute /> Itinéraire de visite</a>
+              <button className="btn ghost small" onClick={() => { addMany(selected); setSelected([]); }}>Ajouter au pipeline</button>
+              <button className="btn ghost small" onClick={() => setSelected([])}>Vider</button>
+            </div>
           )}
         </main>
       )}
 
       {view === "pipeline" && (
-        <Board leads={leads} pipeline={pipeline} onOpen={setOpenId} onMove={(id, stage) => updatePipeline(id, { stage })} />
+        <Board leads={leads} pipeline={pipeline} onOpen={setOpenId} onMove={(id, stage) => updatePipeline(id, { stage })} routeUrl={routeUrl} />
       )}
+
+      {view === "bilan" && <Dashboard leads={leads} pipeline={pipeline} onOpen={setOpenId} />}
 
       {view === "reglages" && (
         <main className="settings">
           <h1>Réglages</h1>
-          <p>Ces infos signent tes scripts, e-mails et messages. Elles restent dans ce navigateur.</p>
+          <p>Ces infos signent tes e-mails, messages et scripts de visite. Elles restent dans ce navigateur.</p>
           <div className="row2">
             <label className="field">Prénom<input value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} /></label>
             <label className="field">Studio<input value={profile.studio} onChange={(e) => setProfile({ ...profile, studio: e.target.value })} /></label>
@@ -245,12 +329,28 @@ export default function Home() {
             <label className="field">Prix annoncé (facultatif)<input value={profile.price} placeholder="ex. 890 € puis 39 €/mois" onChange={(e) => setProfile({ ...profile, price: e.target.value })} /></label>
           </div>
           <label className="field">Ton offre, en une phrase<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
-          <p className="hint">Le pipeline et les entreprises trouvées sont aussi enregistrés dans ce navigateur. Exporte régulièrement en CSV pour les garder ailleurs.</p>
-          <button className="btn ghost small" onClick={() => { if (confirm("Effacer toutes les entreprises et le pipeline de ce navigateur ?")) { setLeads({}); setPipeline({}); setResult(null); } }}>
-            Effacer les données
-          </button>
+          <p className="hint">Le pipeline et les entreprises trouvées sont enregistrés dans ce navigateur : exporte-les en CSV pour les garder ailleurs.</p>
+          {confirmReset ? (
+            <div className="actions">
+              <span className="error">Tout effacer de ce navigateur ?</span>
+              <button className="btn small" onClick={() => { setLeads({}); setPipeline({}); setResult(null); setRecent([]); setConfirmReset(false); }}>Oui, effacer</button>
+              <button className="btn ghost small" onClick={() => setConfirmReset(false)}>Annuler</button>
+            </div>
+          ) : (
+            <button className="btn ghost small" onClick={() => setConfirmReset(true)}>Effacer les données</button>
+          )}
         </main>
       )}
+
+      <nav className="bottom-nav" aria-label="Navigation">
+        {NAV.map(([id, label, Icon]) => (
+          <button key={id} aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>
+            <Icon />
+            <span>{label}</span>
+            {id === "pipeline" && pipelineCount > 0 && <b>{pipelineCount}</b>}
+          </button>
+        ))}
+      </nav>
 
       {openLead && (
         <LeadDrawer

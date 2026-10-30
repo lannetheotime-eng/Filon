@@ -2,50 +2,57 @@ import type { Lead, Profile, Details } from "./types";
 import { getTrade, pickVariant } from "./trades";
 
 const signature = (p: Profile) =>
-  [p.firstName + (p.studio ? ` · ${p.studio}` : ""), p.phone, p.site].filter(Boolean).join("\n");
+  [p.firstName + (p.studio ? ` · ${p.studio}` : ""), p.phone, p.email, p.site].filter(Boolean).join("\n");
+
+const FEMININE = new Set(["boulangerie", "boucherie"]);
+export const aTrade = (singular: string) => (FEMININE.has(singular) ? `une ${singular}` : `un ${singular}`);
 
 function reviewsLine(l: Lead) {
   if (!l.reviews) return "";
   return `${l.reviews} avis${l.rating ? ` et une note de ${String(l.rating).replace(".", ",")}` : ""}`;
 }
 
-export function callScript(l: Lead, p: Profile) {
+// Le constat, formulé selon la situation de l'entreprise
+function gap(l: Lead) {
+  if (l.presence === "vieux") {
+    const top = (l.audit?.issues || []).slice(0, 2).map((i) => i.charAt(0).toLowerCase() + i.slice(1));
+    return top.length ? `votre site existe, mais ${top.join(" et ")}` : "votre site mériterait un coup de neuf";
+  }
+  if (l.presence === "reseaux") return "vous avez une page sur les réseaux, mais pas de site à vous";
+  return "vous n'avez pas encore de site internet";
+}
+
+const offerWord = (l: Lead) => (l.presence === "vieux" ? "une nouvelle version de votre site" : "une maquette de votre site");
+
+export function visitScript(l: Lead, p: Profile) {
   const t = getTrade(l.tradeId)!;
-  const presence =
-    l.presence === "reseaux"
-      ? "j'ai vu que vous aviez une page sur les réseaux, mais pas de site à vous"
-      : "j'ai vu que vous n'aviez pas encore de site internet";
   const proof = reviewsLine(l);
   return [
     {
-      step: "Ouverture",
-      text: `Bonjour, je suis ${p.firstName}, ${p.studio ? `graphiste chez ${p.studio}` : "graphiste"}, juste à côté de chez vous. Je vous prends 30 secondes, je ne vous dérange pas ?`,
+      step: "En entrant",
+      text: `Bonjour, je suis ${p.firstName}, ${p.studio ? `graphiste chez ${p.studio}` : "graphiste"}. Est-ce que je peux parler au responsable deux minutes, quand il aura un moment ?`,
     },
     {
       step: "Le constat",
-      text: `Je suis tombé sur votre fiche Google${proof ? ` : ${proof}, bravo` : ""}. Par contre, ${presence}. Aujourd'hui, ${t.hookDetail}.`,
+      text: `Je suis tombé sur votre fiche Google${proof ? ` : ${proof}, vos clients vous adorent` : ""}. Par contre, ${gap(l)}. Aujourd'hui, ${t.hookDetail}.`,
     },
     {
-      step: "La proposition",
-      text: `J'ai préparé une maquette de ce que pourrait être le site de ${l.name}, avec vos vraies infos. Je peux vous l'envoyer par SMS ou passer vous la montrer, ça prend cinq minutes. Ça vous dit ?`,
+      step: "Montrer",
+      text: `J'ai préparé ${offerWord(l)} pour ${l.name}, avec vos vraies infos. Je vous la montre sur mon téléphone, ça prend une minute.`,
     },
     {
-      step: "Si c'est oui",
-      text: `Parfait. Je vous l'envoie sur ce numéro ? Et on se cale un créneau ${["mardi", "jeudi"][l.name.length % 2]} en fin de matinée pour en parler ?`,
+      step: "Conclure",
+      text: `Si ça vous parle, je vous laisse ma carte et je vous envoie la maquette par e-mail ce soir. On peut se revoir la semaine prochaine pour en discuter ?`,
     },
   ];
 }
 
 export function objections(l: Lead, p: Profile) {
   const t = getTrade(l.tradeId)!;
-  return [
+  const list = [
     {
       q: "« J'ai déjà assez de clients. »",
-      a: `Tant mieux, c'est justement pour ça que vos avis sont bons. Un site ne sert pas qu'à en trouver plus : il répond aux questions (horaires, tarifs, accès) à votre place et vous évite des appels.`,
-    },
-    {
-      q: "« Ma page Facebook suffit. »",
-      a: `Elle est utile, mais beaucoup de gens n'ont pas Facebook et Google met en avant les entreprises qui ont un site. Le site renvoie vers votre page, les deux se complètent.`,
+      a: `Tant mieux, ça se voit à vos avis. Un site ne sert pas qu'à en trouver plus : il répond aux questions (horaires, tarifs, accès) à votre place et vous évite des appels.`,
     },
     {
       q: "« C'est trop cher. »",
@@ -59,18 +66,49 @@ export function objections(l: Lead, p: Profile) {
     },
     {
       q: "« Envoyez-moi un mail. »",
-      a: `Avec plaisir. Je vous envoie la maquette de votre ${t.singular} directement, c'est plus parlant qu'une plaquette. Je vous rappelle jeudi pour avoir votre avis ?`,
+      a: `Avec plaisir. Je vous envoie la maquette de votre ${t.singular} directement, c'est plus parlant qu'une plaquette. Je repasse en fin de semaine pour avoir votre avis ?`,
     },
   ];
+  if (l.presence === "vieux")
+    list.unshift({
+      q: "« J'ai déjà un site. »",
+      a: `Oui, et c'est une bonne base. Mais ${gap(l).replace("votre site existe, mais ", "")} : sur un téléphone, une partie de vos clients repart avant même de vous appeler. Je vous montre la différence ?`,
+    });
+  else
+    list.unshift({
+      q: "« Ma page Facebook suffit. »",
+      a: `Elle est utile, mais beaucoup de gens n'ont pas Facebook et Google met en avant les entreprises qui ont un site. Le site renvoie vers votre page, les deux se complètent.`,
+    });
+  return list;
 }
 
 export function emails(l: Lead, p: Profile) {
   const proof = reviewsLine(l);
-  return [
-    {
-      label: "Premier contact",
-      subject: `Une idée de site pour ${l.name}`,
-      body: `Bonjour,
+  const issues = l.audit?.issues || [];
+  const first =
+    l.presence === "vieux"
+      ? {
+          label: "Premier contact",
+          subject: `Votre site ${l.name}, vu depuis un téléphone`,
+          body: `Bonjour,
+
+Je suis ${p.firstName}${p.studio ? `, de ${p.studio}` : ""}, graphiste près de chez vous.
+
+En cherchant ${getTrade(l.tradeId)!.singular} à ${l.city}, je suis tombé sur ${l.name}${proof ? ` (${proof} sur Google, bravo)` : ""}. J'ai regardé votre site et j'ai relevé quelques points qui vous font sans doute perdre des clients :
+
+${issues.slice(0, 4).map((i) => `• ${i}`).join("\n")}
+
+J'ai préparé une nouvelle version de votre site, avec vos vraies infos, pour vous montrer la différence. Je vous l'envoie ?
+
+Je propose ${p.offer}.
+
+Bonne journée,
+${signature(p)}`,
+        }
+      : {
+          label: "Premier contact",
+          subject: `Une idée de site pour ${l.name}`,
+          body: `Bonjour,
 
 Je suis ${p.firstName}${p.studio ? `, de ${p.studio}` : ""}, graphiste près de chez vous.
 
@@ -82,13 +120,15 @@ Je propose ${p.offer}.
 
 Bonne journée,
 ${signature(p)}`,
-    },
+        };
+  return [
+    first,
     {
       label: "Relance J+3",
-      subject: `Re : Une idée de site pour ${l.name}`,
+      subject: `Re : ${first.subject}`,
       body: `Bonjour,
 
-Je me permets de revenir vers vous au sujet de la maquette de site pour ${l.name}. Elle est prête, il me suffit d'une réponse pour vous l'envoyer.
+Je me permets de revenir vers vous au sujet de ${offerWord(l)} pour ${l.name}. Elle est prête, il me suffit d'une réponse pour vous l'envoyer.
 
 Si ce n'est pas le moment, dites-le-moi simplement et je ne vous relancerai plus.
 
@@ -99,27 +139,41 @@ ${signature(p)}`,
       subject: `Je clos le dossier ${l.name} ?`,
       body: `Bonjour,
 
-Sans retour de votre part, je range la maquette que j'avais préparée pour ${l.name}. Si un jour vous voulez un site, mon numéro reste le même.
+Sans retour de votre part, je range la maquette que j'avais préparée pour ${l.name}. Si un jour vous en avez besoin, mes coordonnées restent les mêmes.
 
 Belle continuation,
+${signature(p)}`,
+    },
+    {
+      label: "Après une visite",
+      subject: `Suite à mon passage chez ${l.name}`,
+      body: `Bonjour,
+
+Merci pour votre accueil aujourd'hui. Comme promis, voici ${offerWord(l)} que je vous ai montrée.
+
+[Lien ou pièce jointe de la maquette]
+
+Elle reprend vos vraies infos ; tout reste modifiable selon vos envies. Je repasse en fin de semaine si vous voulez en parler de vive voix.
+
 ${signature(p)}`,
     },
   ];
 }
 
 export function directMessages(l: Lead, p: Profile) {
+  const situation = l.presence === "vieux" ? "un site qui mériterait un coup de neuf" : "pas encore de site";
   return [
     {
       label: "Instagram",
-      body: `Bonjour ! Je suis ${p.firstName}, graphiste${p.studio ? ` chez ${p.studio}` : ""} à côté. J'adore ce que vous faites. J'ai remarqué que ${l.name} n'avait pas de site, alors j'ai préparé une petite maquette avec vos vraies infos. Je vous l'envoie ici ?`,
+      body: `Bonjour ! Je suis ${p.firstName}, graphiste${p.studio ? ` chez ${p.studio}` : ""} à côté. J'adore ce que vous faites. J'ai remarqué que ${l.name} avait ${situation}, alors j'ai préparé une petite maquette avec vos vraies infos. Je vous l'envoie ici ?`,
+    },
+    {
+      label: "Facebook",
+      body: `Bonjour, je suis ${p.firstName}${p.studio ? ` (${p.studio})` : ""}, graphiste à ${l.city}. Je vois que ${l.name} a ${situation}. J'ai préparé une maquette pour vous montrer ce que ça pourrait donner, ça vous intéresse ?`,
     },
     {
       label: "LinkedIn",
-      body: `Bonjour, je suis ${p.firstName}${p.studio ? ` (${p.studio})` : ""}, je crée des sites pour les entreprises de ${l.city}. ${l.name} a de très bons retours sur Google mais pas encore de site : j'ai préparé une maquette, je peux vous la partager ?`,
-    },
-    {
-      label: "SMS après appel",
-      body: `Bonjour, c'est ${p.firstName}, suite à notre appel : voici la maquette du site de ${l.name}. Dites-moi ce que vous en pensez !${p.site ? `\n${p.site}` : ""}`,
+      body: `Bonjour, je suis ${p.firstName}${p.studio ? ` (${p.studio})` : ""}, je crée des sites pour les entreprises de ${l.city}. ${l.name} a de très bons retours sur Google mais ${situation} : j'ai préparé une maquette, je peux vous la partager ?`,
     },
   ];
 }
@@ -132,7 +186,7 @@ export function sitePrompt(l: Lead, d: Details | null) {
     ? d.reviews!.filter((r) => r.text).map((r) => `  - ${r.author} (${r.rating}/5, ${r.when}) : « ${r.text.replace(/\s+/g, " ").trim()} »`).join("\n")
     : "  - (aucun avis récupéré : ne pas inventer d'avis, masquer la section)";
 
-  return `Crée le site vitrine d'une ${t.singular} en un seul fichier HTML (HTML + CSS + JS inline, aucune dépendance sauf Google Fonts). Le site doit être prêt à montrer au gérant tel quel.
+  return `Crée le site vitrine d'${aTrade(t.singular)} en un seul fichier HTML (HTML + CSS + JS inline, aucune dépendance sauf Google Fonts). Le site doit être prêt à montrer au gérant tel quel.
 
 ## L'entreprise (données réelles, ne rien inventer)
 - Nom : ${l.name}
@@ -141,7 +195,7 @@ export function sitePrompt(l: Lead, d: Details | null) {
 - Téléphone : ${l.phone || "(non communiqué : bouton « Nous contacter » à la place)"}
 - Note Google : ${l.rating ? `${l.rating}/5 sur ${l.reviews} avis` : "non disponible"}
 - Fiche Google Maps : ${l.mapsUrl || "—"}
-${l.socialUrl ? `- Réseau social existant : ${l.socialUrl}\n` : ""}${d?.summary ? `- Description Google : ${d.summary}\n` : ""}- Horaires :
+${l.socialUrl ? `- Réseau social existant : ${l.socialUrl}\n` : ""}${l.website ? `- Site actuel (à remplacer, ne pas copier son design) : ${l.website}\n- Défauts relevés sur le site actuel, à corriger : ${(l.audit?.issues || []).join(" ; ")}\n` : ""}${d?.summary ? `- Description Google : ${d.summary}\n` : ""}- Horaires :
 ${hours}
 - Avis clients (à citer tels quels, sans les modifier) :
 ${reviews}

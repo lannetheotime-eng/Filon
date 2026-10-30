@@ -49,16 +49,21 @@ export default function MapView({
     const m = map.current, lg = layer.current, Lf = L.current;
     if (!m || !lg || !Lf) return;
     lg.clearLayers();
-    const mark = getComputedStyle(document.documentElement).getPropertyValue("--mark").trim() || "#f0207e";
+    const css = getComputedStyle(document.documentElement);
+    const colors = {
+      aucun: css.getPropertyValue("--mark").trim() || "#154dff",
+      reseaux: css.getPropertyValue("--social").trim() || "#b26a00",
+      vieux: css.getPropertyValue("--old").trim() || "#7a3df0",
+    };
     const pts: [number, number][] = [];
     for (const l of leads) {
       const active = l.id === activeId;
       const c = Lf.circleMarker([l.lat, l.lng], {
         radius: active ? 11 : 7,
-        color: mark,
-        weight: l.presence === "aucun" ? (active ? 4 : 2) : 2,
-        fillColor: mark,
-        fillOpacity: l.presence === "aucun" ? 0.85 : 0.15,
+        color: colors[l.presence] || colors.aucun,
+        weight: active ? 4 : 2,
+        fillColor: colors[l.presence] || colors.aucun,
+        fillOpacity: active ? 1 : 0.8,
       });
       c.bindTooltip(l.name, { direction: "top", offset: [0, -6] });
       c.on("click", () => onSelect(l.id));

@@ -1,4 +1,21 @@
-export type WebPresence = "aucun" | "reseaux"; // "reseaux" = Facebook, Instagram, annuaire… mais pas de vrai site
+// "reseaux" = Facebook, Instagram, annuaire… mais pas de vrai site ; "vieux" = un site existe mais il est à refaire
+export type WebPresence = "aucun" | "reseaux" | "vieux";
+
+export type SiteAudit = {
+  score: number; // 0 à 100 : plus c'est haut, plus le site est à refaire
+  issues: string[];
+  https: boolean;
+  mobile: boolean;
+  url: string;
+  email?: string;
+  lastYear?: number;
+};
+
+export const PRESENCE_LABEL: Record<WebPresence, string> = {
+  aucun: "Aucun site",
+  reseaux: "Réseaux seulement",
+  vieux: "Site à refaire",
+};
 
 export type Lead = {
   id: string; // place id Google
@@ -15,6 +32,8 @@ export type Lead = {
   mapsUrl?: string;
   presence: WebPresence;
   socialUrl?: string;
+  website?: string;
+  audit?: SiteAudit;
   category?: string;
   hours?: string[];
   score: number;
@@ -37,6 +56,9 @@ export type PipelineEntry = {
   notes: string;
   updatedAt: string;
   followUp?: string; // date AAAA-MM-JJ
+  amount?: number; // montant signé, en euros
+  contactedAt?: string;
+  channel?: "email" | "visite" | "message" | "appel";
 };
 
 export type ScanResult = {
@@ -44,7 +66,8 @@ export type ScanResult = {
   tradeId: string;
   leads: Lead[];
   scanned: number; // fiches analysées
-  withSite: number;
+  withSite: number; // sites corrects, écartés
+  audited: number; // sites analysés
   calls: number; // requêtes Google facturées
   demo: boolean;
 };

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Lead, PipelineEntry, Stage } from "../lib/types";
-import { STAGES } from "../lib/types";
+import { STAGES, PRESENCE_LABEL } from "../lib/types";
 import { getTrade } from "../lib/trades";
 import { toCsv, download } from "../lib/store";
 
@@ -10,11 +10,13 @@ export default function Board({
   pipeline,
   onMove,
   onOpen,
+  routeUrl,
 }: {
   leads: Record<string, Lead>;
   pipeline: Record<string, PipelineEntry>;
   onMove: (id: string, stage: Stage) => void;
   onOpen: (id: string) => void;
+  routeUrl: (stops: Lead[]) => string;
 }) {
   const [over, setOver] = useState<Stage | null>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -31,7 +33,10 @@ export default function Board({
         Téléphone: l.phone || "",
         Note: l.rating ?? "",
         Avis: l.reviews ?? "",
-        Présence: l.presence === "aucun" ? "Aucun site" : "Réseaux seulement",
+        Situation: PRESENCE_LABEL[l.presence],
+        "E-mail": l.audit?.email || "",
+        Canal: p.channel || "",
+        "Montant signé": p.amount ?? "",
         Score: l.score,
         Étape: STAGES.find((s) => s.id === p.stage)?.label,
         Relance: p.followUp || "",
@@ -77,6 +82,11 @@ export default function Board({
               }}
             >
               <h2>{s.label}<span>{items.length}</span></h2>
+              {s.id === "a_contacter" && items.length > 1 && (
+                <a className="col-action" href={routeUrl(items.slice(0, 10).map((id) => leads[id]))} target="_blank" rel="noreferrer">
+                  Tournée de visite ({Math.min(10, items.length)} arrêts)
+                </a>
+              )}
               <div className="cards">
                 {items.map((id) => {
                   const l = leads[id], p = pipeline[id];
@@ -93,7 +103,8 @@ export default function Board({
                     >
                       <strong>{l.name}</strong>
                       <small>{l.city} · {getTrade(l.tradeId)?.singular}</small>
-                      {l.phone && <small>{l.phone}</small>}
+                      {l.presence === "vieux" && <small className="kind-old">Site à refaire</small>}
+                      {p.stage === "signe" && p.amount ? <small className="amount">{p.amount.toLocaleString("fr-FR")} €</small> : null}
                       {p.followUp && !["signe", "perdu"].includes(p.stage) && (
                         <small className={`due ${late ? "late" : ""}`}>
                           Relance {late ? "à faire" : "le"} {new Date(p.followUp).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Lead, ScanResult, WebPresence, Details } from "./types";
 import { getTrade } from "./trades";
+import { auditMany } from "./audit";
 
 const PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 
@@ -88,7 +89,7 @@ export function scoreLead(l: { rating?: number; reviews?: number; phone?: string
   const activity = Math.min(40, Math.round((Math.log10(reviews + 1) / Math.log10(301)) * 40)); // 300 avis = plein
   const rating = l.rating ? Math.round(Math.max(0, (l.rating - 3) / 2) * 25) : 0;
   const phone = l.phone ? 20 : 0;
-  const gap = l.presence === "aucun" ? 15 : 8;
+  const gap = l.presence === "aucun" ? 15 : l.presence === "vieux" ? 12 : 8;
   return Math.min(100, activity + rating + phone + gap);
 }
 
@@ -142,7 +143,7 @@ async function searchTile(key: string, query: string, tile: Tile, maxPages: numb
   return { places, calls };
 }
 
-export async function scan(cityQuery: string, tradeId: string, deep: boolean): Promise<ScanResult> {
+export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false): Promise<ScanResult> {
   const trade = getTrade(tradeId);
   if (!trade) throw new Error("Métier inconnu.");
   const key = process.env.GOOGLE_PLACES_API_KEY;
@@ -157,7 +158,7 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean): P
   const [lng, lat] = commune.centre.coordinates;
   const city = { name: commune.nom, dept: commune.codeDepartement, lat, lng };
 
-  if (!key) return demoScan(city, tradeId);
+  if (!key) return demoScan(city, tradeId, includeOld);
 
   const seen = new Map<string, any>();
   let calls = 0;
@@ -173,38 +174,57 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean): P
 
   let withSite = 0;
   const leads: Lead[] = [];
+  const toAudit: any[] = [];
   const now = new Date().toISOString();
-  for (const p of seen.values()) {
-    if (p.businessStatus && p.businessStatus !== "OPERATIONAL") continue;
-    const plng = p.location?.longitude, plat = p.location?.latitude;
-    if (plng == null || !inCommune(commune, plng, plat)) continue;
-    const c = classify(p.websiteUri);
-    if (c.presence === "site") { withSite++; continue; }
-    const base = {
-      phone: p.nationalPhoneNumber,
-      rating: p.rating,
-      reviews: p.userRatingCount,
-      presence: c.presence as WebPresence,
-    };
-    leads.push({
+  const make = (p: any, presence: WebPresence, extra: Partial<Lead> = {}): Lead => {
+    const base = { phone: p.nationalPhoneNumber, rating: p.rating, reviews: p.userRatingCount, presence };
+    return {
       id: p.id,
       name: p.displayName?.text || "Sans nom",
       tradeId,
       city: commune.nom,
       address: p.formattedAddress || "",
       phoneIntl: p.internationalPhoneNumber,
-      lat: plat,
-      lng: plng,
+      lat: p.location.latitude,
+      lng: p.location.longitude,
       mapsUrl: p.googleMapsUri,
-      socialUrl: c.social,
       category: p.primaryTypeDisplayName?.text,
       score: scoreLead(base),
       foundAt: now,
       ...base,
-    });
+      ...extra,
+    };
+  };
+  for (const p of seen.values()) {
+    if (p.businessStatus && p.businessStatus !== "OPERATIONAL") continue;
+    const plng = p.location?.longitude, plat = p.location?.latitude;
+    if (plng == null || !inCommune(commune, plng, plat)) continue;
+    const c = classify(p.websiteUri);
+    if (c.presence === "site") {
+      if (includeOld) toAudit.push(p);
+      else withSite++;
+      continue;
+    }
+    leads.push(make(p, c.presence as WebPresence, { socialUrl: c.social }));
+  }
+
+  // Sites existants : on garde ceux qui sont à refaire
+  let audited = 0;
+  if (toAudit.length) {
+    const audits = await auditMany(toAudit.slice(0, 80).map((p) => p.websiteUri));
+    for (const p of toAudit) {
+      const a = audits.get(p.websiteUri);
+      if (!a) { withSite++; continue; }
+      audited++;
+      if (a.score >= 30) {
+        const lead = make(p, "vieux", { website: p.websiteUri, audit: a });
+        lead.score = Math.min(100, Math.round(lead.score * 0.7 + a.score * 0.3));
+        leads.push(lead);
+      } else withSite++;
+    }
   }
   leads.sort((a, b) => b.score - a.score);
-  return { city, tradeId, leads, scanned: leads.length + withSite, withSite, calls, demo: false };
+  return { city, tradeId, leads, scanned: leads.length + withSite, withSite, audited, calls, demo: false };
 }
 
 // Détails à la demande (horaires, avis) pour nourrir le prompt du site.
@@ -238,14 +258,15 @@ export async function placeDetails(id: string): Promise<Details> {
 }
 
 // ——— Mode démo : données fictives, pour essayer l'outil sans clé API ———
-function demoScan(city: ScanResult["city"], tradeId: string): ScanResult {
+function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false): ScanResult {
   const trade = getTrade(tradeId)!;
   const names = ["du Marché", "Saint-Cyprien", "des Carmes", "Martin", "du Capitole", "Lafargue", "de la Gare", "Ferrand", "des Minimes", "Rouzaud", "du Canal", "Bonnet"];
   const streets = ["rue des Lois", "allée Jean Jaurès", "rue de Metz", "place Dupuy", "avenue de Muret", "rue Riquet", "boulevard de Strasbourg", "rue Pargaminières"];
   let seed = tradeId.length * 97 + city.name.length * 13;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
   const leads: Lead[] = names.map((n, i) => {
-    const presence: WebPresence = rnd() > 0.7 ? "reseaux" : "aucun";
+    const r = rnd();
+    const presence: WebPresence = includeOld && i % 4 === 1 ? "vieux" : r > 0.7 ? "reseaux" : "aucun";
     const reviews = Math.round(rnd() * 220);
     const rating = Math.round((3.6 + rnd() * 1.4) * 10) / 10;
     const phone = rnd() > 0.1 ? `05 61 ${String(10 + i * 7).padStart(2, "0")} ${String(Math.round(rnd() * 89) + 10)} ${String(Math.round(rnd() * 89) + 10)}` : undefined;
@@ -261,11 +282,15 @@ function demoScan(city: ScanResult["city"], tradeId: string): ScanResult {
       lng: city.lng + (rnd() - 0.5) * 0.07,
       mapsUrl: `https://www.google.com/maps/search/${encodeURIComponent(trade.singular + " " + city.name)}`,
       socialUrl: presence === "reseaux" ? "https://www.facebook.com/" : undefined,
+      website: presence === "vieux" ? "http://exemple-demo.fr" : undefined,
+      audit: presence === "vieux"
+        ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017 }
+        : undefined,
       score: scoreLead(base),
       foundAt: new Date().toISOString(),
       ...base,
     };
   });
   leads.sort((a, b) => b.score - a.score);
-  return { city, tradeId, leads, scanned: leads.length + 9, withSite: 9, calls: 0, demo: true };
+  return { city, tradeId, leads, scanned: leads.length + 9, withSite: 9, audited: includeOld ? 12 : 0, calls: 0, demo: true };
 }
