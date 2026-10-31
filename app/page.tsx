@@ -6,8 +6,8 @@ import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } fro
 import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
 import { mergeData, toSync, type SyncData } from "../lib/sync";
-import { detectNeeds, SERVICES } from "../lib/needs";
-import { siteStatus, activity } from "../lib/site";
+import { detectNeeds, SERVICES, upcomingMoments } from "../lib/needs";
+import { activity, rowStatus } from "../lib/site";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
@@ -20,19 +20,6 @@ type View = "scan" | "today" | "pipeline" | "bilan" | "reglages";
 type Recent = { city: string; tradeId: string; at: string };
 type Usage = { used: number; limit: number | null; today: number; dailyLimit: number };
 type Me = { mode: "simple" | "comptes"; user: { email: string; role: "admin" | "user" } | null; usage: Usage | null; google: boolean };
-
-function Score({ value }: { value: number }) {
-  const r = 20, c = 2 * Math.PI * r;
-  return (
-    <div className="score" aria-label={`Priorité ${value} sur 100`}>
-      <svg viewBox="0 0 46 46" width="46" height="46">
-        <circle cx="23" cy="23" r={r} fill="none" stroke="var(--line)" strokeWidth="3" />
-        <circle cx="23" cy="23" r={r} fill="none" stroke="var(--mark)" strokeWidth="3" strokeDasharray={`${(value / 100) * c} ${c}`} strokeLinecap="round" />
-      </svg>
-      {value}
-    </div>
-  );
-}
 
 // Itinéraire Google Maps : départ depuis la position actuelle, jusqu'à 10 arrêts
 function routeUrl(stops: Lead[]) {
@@ -292,7 +279,7 @@ export default function Home() {
   const selLeads = selected.map((id) => leads[id]).filter(Boolean);
 
   const NAV: [View, string, () => React.ReactElement][] = [
-    ["scan", "Scanner", IconScan],
+    ["scan", "Chercher", IconScan],
     ["today", "Aujourd'hui", IconToday],
     ["pipeline", "Pipeline", IconBoard],
     ["bilan", "Bilan", IconStats],
@@ -320,77 +307,70 @@ export default function Home() {
       </nav>
 
       {view === "scan" && (
-        <main>
-          <form className="query" onSubmit={(e) => { e.preventDefault(); runScan(); }}>
-            <span className="fixed">Trouver des</span>
-            <span className="pick">
-              <span aria-hidden>{(getTrade(tradeId) || TRADES[0]).label.toLowerCase()}</span>
-              <select value={tradeId} onChange={(e) => setTradeId(e.target.value)} aria-label="Métier">
-                {TRADES.map((t) => <option key={t.id} value={t.id}>{t.label.toLowerCase()}</option>)}
+        <main className="find">
+          <form className="searchbar" onSubmit={(e) => { e.preventDefault(); runScan(); }}>
+            <label className="sb-field">
+              <span>Métier</span>
+              <select value={tradeId} onChange={(e) => setTradeId(e.target.value)}>
+                {TRADES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
-            </span>
-            <span className="mark">{includeAll ? "à équiper," : includeOld ? "sans site, ou avec un site à refaire," : "sans site"}</span>
-            <span className="fixed">à</span>
-            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="ville" aria-label="Ville ou code postal" size={Math.max(6, city.length)} />
+            </label>
+            <label className="sb-field grow">
+              <span>Ville</span>
+              <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville ou code postal" />
+            </label>
+            <button className="btn sb-go" type="submit" disabled={loading || !city.trim()}>
+              {loading ? "Recherche…" : "Chercher"}
+            </button>
           </form>
 
-          <div className="run">
-            <button className="btn big" onClick={() => runScan()} disabled={loading || !city.trim()}>
-              {loading ? (includeOld ? "Scan et analyse des sites…" : "Scan en cours…") : around.trim() ? "Scanner le quartier" : "Scanner la ville"}
-            </button>
-            <label className="switch">
-              <input type="checkbox" checked={includeOld} onChange={(e) => setIncludeOld(e.target.checked)} />
-              <span aria-hidden />
-              Analyser les sites existants
-            </label>
-            <label className="switch">
-              <input type="checkbox" checked={includeAll} onChange={(e) => setIncludeAll(e.target.checked)} />
-              <span aria-hidden />
-              Inclure les sites corrects (maintenance, print)
-            </label>
-            <label className="switch">
-              <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} />
-              <span aria-hidden />
-              Scan complet de la ville
-            </label>
-            {error && <span className="error">{error}</span>}
+          <div className="sb-under">
+            <div className="target" role="radiogroup" aria-label="Qui chercher">
+              {([
+                ["sans", "Sans site"],
+                ["refaire", "+ sites à refaire"],
+                ["toutes", "Toutes"],
+              ] as const).map(([id, label]) => {
+                const on = (id === "sans" && !includeOld && !includeAll) || (id === "refaire" && includeOld && !includeAll) || (id === "toutes" && includeAll);
+                return (
+                  <button key={id} type="button" role="radio" aria-checked={on} className={on ? "on" : ""}
+                    onClick={() => { setIncludeOld(id !== "sans"); setIncludeAll(id === "toutes"); }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <details className="opts">
+              <summary>Options{around.trim() || deep ? " ·" : ""}{around.trim() ? " quartier" : ""}{deep ? " ville entière" : ""}</summary>
+              <div className="opts-body">
+                <label className="field">Autour d'une adresse (facultatif)
+                  <input value={around} onChange={(e) => setAround(e.target.value)} placeholder="ex. place du Capitole" />
+                </label>
+                <label className="field">Rayon
+                  <select value={radius} onChange={(e) => setRadius(+e.target.value)} disabled={!around.trim()}>
+                    {[500, 1000, 2000, 5000].map((r) => <option key={r} value={r}>{r >= 1000 ? `${r / 1000} km` : `${r} m`}</option>)}
+                  </select>
+                </label>
+                <label className="switch small">
+                  <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} disabled={!!around.trim()} />
+                  <span aria-hidden />
+                  Toute la ville (jusqu'à 27 requêtes)
+                </label>
+              </div>
+            </details>
+            {live && <span className="cost">{scanCost <= 3 ? "1 à 3" : `jusqu'à ${scanCost}`} requêtes · {me?.mode === "comptes" && me.usage ? `${me.usage.today}/${me.usage.dailyLimit} aujourd'hui` : `${Math.max(0, cap - usedToday)} restantes aujourd'hui`}</span>}
           </div>
-          <div className="around">
-            <label className="around-field">
-              <span>Autour de</span>
-              <input value={around} onChange={(e) => setAround(e.target.value)} placeholder="une adresse, une place, un quartier (facultatif)" aria-label="Scanner autour d'une adresse" />
-            </label>
-            <select value={radius} onChange={(e) => setRadius(+e.target.value)} aria-label="Rayon" disabled={!around.trim()}>
-              {[500, 1000, 2000, 5000].map((r) => <option key={r} value={r}>{r >= 1000 ? `${r / 1000} km` : `${r} m`}</option>)}
-            </select>
-            {live && <span className="cost">Coût : jusqu'à {scanCost} requêtes · {me?.mode === "comptes" ? "" : `il t'en reste ${Math.max(0, cap - usedToday)} aujourd'hui`}</span>}
-          </div>
-          {me?.google && me.mode === "simple" && (
-            <p className="usage">
-              {(() => {
-                const m = localUsage.month === new Date().toISOString().slice(0, 7) ? localUsage.calls : 0;
-                const t = localUsage.day === new Date().toISOString().slice(0, 10) ? localUsage.today : 0;
-                return `${m} requête${m > 1 ? "s" : ""} Google ce mois-ci depuis cet appareil, dont ${t} aujourd'hui. Scan rapide : 1 à 3, scan complet : jusqu'à 27.`;
-              })()}
-            </p>
-          )}
-          {me?.usage && me.google && me.mode === "comptes" && (
-            <p className="usage">
-              {me.usage.limit != null
-                ? `${me.usage.used} / ${me.usage.limit} requêtes Google ce mois-ci`
-                : `${me.usage.used} requête${me.usage.used > 1 ? "s" : ""} Google ce mois-ci`}
-              {` · ${me.usage.today} / ${me.usage.dailyLimit} aujourd'hui. Scan rapide : 1 à 3, scan complet : jusqu'à 27.`}
-            </p>
-          )}
+          {error && <p className="error find-err">{error}</p>}
+
           {ready && !profile.firstName && (
             <div className="onboard">
               <div>
                 <b>Bienvenue sur Filon</b>
-                <p>Renseigne ton prénom et ton studio : ils signent tes e-mails, tes scripts et tes rapports d'audit.</p>
+                <p>Ton prénom et ton studio signent tes e-mails, tes scripts et tes rapports.</p>
               </div>
               <div className="onboard-fields">
                 <input aria-label="Prénom" placeholder="Prénom" id="ob-first" />
-                <input aria-label="Studio" placeholder="Studio ou entreprise" id="ob-studio" />
+                <input aria-label="Studio" placeholder="Studio" id="ob-studio" />
                 <button className="btn small" onClick={() => {
                   const f = (document.getElementById("ob-first") as HTMLInputElement).value.trim();
                   const st = (document.getElementById("ob-studio") as HTMLInputElement).value.trim();
@@ -400,65 +380,78 @@ export default function Home() {
             </div>
           )}
 
-          {recent.length > 0 && (
-            <div className="recent">
-              <span className="hint">Récents</span>
-              {recent.map((r) => (
-                <button key={r.city + r.tradeId} className="chip" onClick={() => { setCity(r.city); setTradeId(r.tradeId); runScan(r.city, r.tradeId); }} disabled={loading}>
-                  {getTrade(r.tradeId)?.label} · {r.city}
-                </button>
-              ))}
-            </div>
+          {!result && !loading && (
+            <section className="empty-start">
+              <h1>Trouve tes prochains clients</h1>
+              <p>Choisis un métier et une ville. Filon repère les entreprises sans site ou avec un site à refaire, et te dit comment les approcher.</p>
+              {recent.length > 0 && (
+                <div className="recent">
+                  {recent.map((r) => (
+                    <button key={r.city + r.tradeId} className="chip" onClick={() => { setCity(r.city); setTradeId(r.tradeId); runScan(r.city, r.tradeId); }} disabled={loading}>
+                      {getTrade(r.tradeId)?.label} · {r.city}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {result && (
             <section className="results">
-              <div className="headline">
-                <span className="n">{result.leads.length}</span>
-                <div>
-                  <p className="big">prospects pour {trade.label.toLowerCase()} à {result.city.name}</p>
-                  {result.city.zone && <p className="hint">Zone : {result.city.zone}</p>}
-                  {regProgress && <p className="hint">Recherche des dates de création dans le registre : {regProgress.done} / {regProgress.total}</p>}
-                  <p>
-                    {result.scanned} fiches Google analysées{result.audited ? `, dont ${result.audited} sites passés au crible` : ""}.
-                    {result.withSite > 0 && ` ${result.withSite} ont un site correct et sont écartées.`}
-                    {!result.demo && ` ${result.calls} requête${result.calls > 1 ? "s" : ""} Google.`}
-                  </p>
+              <div className="res-head">
+                <h1><b>{result.leads.length}</b> {trade.label.toLowerCase()} à {result.city.name}</h1>
+                <p className="hint">
+                  {result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées
+                  {regProgress ? ` · ancienneté ${regProgress.done}/${regProgress.total}` : ""}
+                </p>
+              </div>
+
+              {(() => {
+                const m = upcomingMoments(result.tradeId)[0];
+                return m ? (
+                  <div className="moment">
+                    <b>{m.m.name.charAt(0).toUpperCase() + m.m.name.slice(1)} dans {m.days} jours</b> : bon prétexte pour proposer {m.m.pitch} à toutes ces entreprises.
+                  </div>
+                ) : null;
+              })()}
+
+              <div className="res-bar">
+                <div className="segments" role="tablist" aria-label="Type de prospect">
+                  {(["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
+                    <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)}>
+                      {k === "all" ? "Tous" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              <div className="segments" role="tablist" aria-label="Type de prospect">
-                {(["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
-                  <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)}>
-                    {k === "all" ? "Tous" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
-                  </button>
-                ))}
-              </div>
-
-              <div className="filters">
-                <label>Note min.{" "}
-                  <select value={minRating} onChange={(e) => setMinRating(+e.target.value)}>
-                    {[0, 3.5, 4, 4.5].map((v) => <option key={v} value={v}>{v ? `${String(v).replace(".", ",")}+` : "Toutes"}</option>)}
-                  </select>
-                </label>
-                <label>Avis min.{" "}
-                  <select value={minReviews} onChange={(e) => setMinReviews(+e.target.value)}>
-                    {[0, 5, 10, 30, 100].map((v) => <option key={v} value={v}>{v ? `${v}+` : "Tous"}</option>)}
-                  </select>
-                </label>
-                {wpCount > 0 && (
-                  <label className="switch small">
-                    <input type="checkbox" checked={wpOnly} onChange={(e) => setWpOnly(e.target.checked)} />
-                    <span aria-hidden />
-                    Sites WordPress seulement ({wpCount})
-                  </label>
-                )}
-                <span style={{ flex: 1 }} />
-                <button className="btn ghost small" onClick={() => addMany(shown.map((l) => l.id))} disabled={!shown.length}>Tout ajouter au pipeline</button>
-                <button className="btn ghost small" onClick={exportScan} disabled={!shown.length}>CSV</button>
-                <div className="toggle-view" role="group" aria-label="Affichage">
-                  <button aria-pressed={mobileView === "list"} onClick={() => setMobileView("list")}><IconList /> Liste</button>
-                  <button aria-pressed={mobileView === "map"} onClick={() => setMobileView("map")}><IconMap /> Carte</button>
+                <div className="res-tools">
+                  <div className="toggle-view" role="group" aria-label="Affichage">
+                    <button aria-pressed={mobileView === "list"} onClick={() => setMobileView("list")}><IconList /> Liste</button>
+                    <button aria-pressed={mobileView === "map"} onClick={() => setMobileView("map")}><IconMap /> Carte</button>
+                  </div>
+                  <details className="more">
+                    <summary className="btn ghost small">Filtres et actions</summary>
+                    <div className="more-menu wide">
+                      <label>Note minimum
+                        <select value={minRating} onChange={(e) => setMinRating(+e.target.value)}>
+                          {[0, 3.5, 4, 4.5].map((v) => <option key={v} value={v}>{v ? `${String(v).replace(".", ",")}+` : "Toutes"}</option>)}
+                        </select>
+                      </label>
+                      <label>Avis minimum
+                        <select value={minReviews} onChange={(e) => setMinReviews(+e.target.value)}>
+                          {[0, 5, 10, 30, 100].map((v) => <option key={v} value={v}>{v ? `${v}+` : "Tous"}</option>)}
+                        </select>
+                      </label>
+                      {wpCount > 0 && (
+                        <label className="switch small">
+                          <input type="checkbox" checked={wpOnly} onChange={(e) => setWpOnly(e.target.checked)} />
+                          <span aria-hidden />
+                          WordPress seulement ({wpCount})
+                        </label>
+                      )}
+                      <button onClick={() => addMany(shown.map((l) => l.id))} disabled={!shown.length}>Tout ajouter au pipeline</button>
+                      <button onClick={exportScan} disabled={!shown.length}>Exporter en CSV</button>
+                    </div>
+                  </details>
                 </div>
               </div>
 
@@ -470,35 +463,30 @@ export default function Home() {
                       {shown.map((l) => {
                         const inPipe = pipeline[l.id];
                         const isSel = selected.includes(l.id);
+                        const rs = rowStatus(l);
+                        const act = activity(l.created);
+                        const top = detectNeeds(l).find((n) => n.priority === 1 && !n.deadline) || detectNeeds(l).find((n) => !n.deadline && n.priority === 2);
                         return (
                           <li key={l.id} className="row" data-active={openId === l.id} data-kind={l.presence}>
-                            <label className="sel" onClick={(e) => e.stopPropagation()}>
-                              <input type="checkbox" checked={isSel} onChange={() => toggle(l.id)} aria-label={`Sélectionner ${l.name} pour la tournée`} />
+                            <label className="sel" title="Ajouter à la tournée" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox" checked={isSel} onChange={() => toggle(l.id)} aria-label={`Ajouter ${l.name} à la tournée`} />
                             </label>
                             <button className="row-main" onClick={() => setOpenId(l.id)}>
-                              <Score value={l.score} />
                               <div className="row-text">
                                 <h3>{l.name}</h3>
                                 <div className="meta">
-                                  <span>{l.address.replace(/, France$/, "")}</span>
-                                  {l.rating && <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span>}
+                                  <span className={`pill ${rs.tone}`}>{rs.label}</span>
+                                  {l.rating ? <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span> : null}
+                                  {act && <span>depuis {act.since}</span>}
                                 </div>
-                                {l.audit && l.audit.issues.length > 0 && <div className="issues">{l.audit.issues.slice(0, 3).join(" · ")}</div>}
-                                <div className="needs-line">
-                                  {(() => { const st = siteStatus(l); return <span className={`cms ${st.kind}`}>{st.label}</span>; })()}
-                                  {activity(l.created) && <span className="since">{activity(l.created)!.label}</span>}
-                                  {detectNeeds(l).filter((n) => n.priority <= 2).slice(0, 3).map((n) => (
-                                    <span key={n.key} className="need-chip">{n.title.length > 42 ? n.title.slice(0, 40) + "…" : n.title}</span>
-                                  ))}
-                                </div>
+                                {top && <div className="next">→ {top.title}</div>}
                               </div>
                             </button>
                             <div className="side">
-                              <span className={`tag ${l.presence}`}>{PRESENCE_LABEL[l.presence]}</span>
                               {inPipe ? (
                                 <span className="tag in">Suivi</span>
                               ) : (
-                                <button className="btn ghost small" onClick={() => updatePipeline(l.id, { stage: "a_contacter" })}>Ajouter</button>
+                                <button className="add" onClick={() => updatePipeline(l.id, { stage: "a_contacter" })} aria-label={`Ajouter ${l.name} au pipeline`}>+</button>
                               )}
                             </div>
                           </li>
@@ -508,7 +496,7 @@ export default function Home() {
                   ) : (
                     <div className="list empty">
                       <strong>Aucune entreprise avec ces filtres</strong>
-                      Baisse la note ou le nombre d'avis minimum, ou lance un scan complet.
+                      Assouplis les filtres, ou cherche « Toutes ».
                     </div>
                   )}
                   <p className="attrib">Données des entreprises : Google. Analyse des sites : Filon.</p>
@@ -517,20 +505,10 @@ export default function Home() {
             </section>
           )}
 
-          {!result && !loading && (
-            <section className="results">
-              <div className="intro">
-                <div><b>1</b><p>Choisis un métier et une ville.</p></div>
-                <div><b>2</b><p>Filon trouve les entreprises sans site, ou dont le site est dépassé.</p></div>
-                <div><b>3</b><p>Pour chacune, un plan d'approche : quel canal, quand, quel angle, quels arguments.</p></div>
-              </div>
-            </section>
-          )}
-
           {selected.length > 0 && (
-            <div className="selbar" role="region" aria-label="Sélection">
-              <span><b>{selected.length}</b> sélectionnée{selected.length > 1 ? "s" : ""}{selected.length >= 10 ? " (maximum)" : ""}</span>
-              <a className="btn small" href={routeUrl(selLeads)} target="_blank" rel="noreferrer"><IconRoute /> Itinéraire de visite</a>
+            <div className="selbar" role="region" aria-label="Tournée">
+              <span><b>{selected.length}</b> dans la tournée{selected.length >= 10 ? " (max.)" : ""}</span>
+              <a className="btn small" href={routeUrl(selLeads)} target="_blank" rel="noreferrer"><IconRoute /> Itinéraire</a>
               <button className="btn ghost small" onClick={() => { addMany(selected); setSelected([]); }}>Ajouter au pipeline</button>
               <button className="btn ghost small" onClick={() => setSelected([])}>Vider</button>
             </div>
@@ -549,98 +527,105 @@ export default function Home() {
       {view === "reglages" && (
         <main className="settings">
           <h1>Réglages</h1>
-          <p>Ces infos signent tes e-mails, tes scripts et tes rapports d'audit, et nourrissent le plan d'approche.</p>
-          <div className="row2">
-            <label className="field">Prénom<input value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} /></label>
-            <label className="field">Studio<input value={profile.studio} onChange={(e) => setProfile({ ...profile, studio: e.target.value })} /></label>
-            <label className="field">Téléphone<input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></label>
-            <label className="field">E-mail<input value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></label>
-            <label className="field">Site<input value={profile.site} onChange={(e) => setProfile({ ...profile, site: e.target.value })} /></label>
-            <label className="field">Prix annoncé (facultatif)<input value={profile.price} placeholder="ex. 890 € puis 39 €/mois" onChange={(e) => setProfile({ ...profile, price: e.target.value })} /></label>
-          </div>
-          <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
-          <h2 className="set-h">Rester dans le gratuit</h2>
-          <div className="set-block">
+
+          <details className="set-sec" open>
+            <summary>Ton profil</summary>
+            <p className="hint">Il signe tes e-mails, tes scripts et tes rapports d'audit.</p>
+            <div className="row2">
+              <label className="field">Prénom<input value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} /></label>
+              <label className="field">Studio<input value={profile.studio} onChange={(e) => setProfile({ ...profile, studio: e.target.value })} /></label>
+              <label className="field">Téléphone<input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></label>
+              <label className="field">E-mail<input value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></label>
+              <label className="field">Site<input value={profile.site} onChange={(e) => setProfile({ ...profile, site: e.target.value })} /></label>
+              <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
+            </div>
+          </details>
+
+          <details className="set-sec">
+            <summary>Tes tarifs</summary>
+            <p className="hint">Prix de départ HT. Laisse vide ce que tu fais sur devis.</p>
+            <div className="prices">
+              {SERVICES.map((sv) => (
+                <label key={sv.id} className="price-row">
+                  <span>{sv.label}<small>{sv.family}</small></span>
+                  <input
+                    type="number" inputMode="numeric" min="0" step="10" placeholder="Sur devis"
+                    value={profile.prices?.[sv.id] ?? ""}
+                    onChange={(e) => {
+                      const prices = { ...(profile.prices || {}) };
+                      if (e.target.value === "") delete prices[sv.id];
+                      else prices[sv.id] = Number(e.target.value);
+                      setProfile({ ...profile, prices });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <label className="field">Ce que tu proposes ensuite (abonnement, suivi…)<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
+            <label className="field">Prix annoncé dans les scripts (facultatif)<input value={profile.price} placeholder="ex. 890 € puis 39 €/mois" onChange={(e) => setProfile({ ...profile, price: e.target.value })} /></label>
+          </details>
+
+          <details className="set-sec">
+            <summary>Tes garanties et références</summary>
+            <p className="hint">Utilisées dans l'argumentaire. N'écris que ce que tu offres vraiment.</p>
+            <label className="field">Tes garanties (une par ligne)
+              <textarea value={profile.guarantees || ""} onChange={(e) => setProfile({ ...profile, guarantees: e.target.value })} placeholder={"Sans engagement de durée\nRetouches jusqu'à validation\nInterlocuteur unique, du premier rendez-vous à la mise en ligne"} />
+            </label>
+            <label className="field">Clients de référence (un par ligne, avec leur accord)
+              <textarea value={profile.references || ""} onChange={(e) => setProfile({ ...profile, references: e.target.value })} placeholder={"Nom du client, ville"} />
+            </label>
+          </details>
+
+          <details className="set-sec">
+            <summary>Rester dans le gratuit</summary>
             <label className="price-row" style={{ borderBottom: 0 }}>
-              <span>Plafond de requêtes Google par jour<small>30 par jour = 930 par mois au plus, sous les 1 000 gratuites</small></span>
+              <span>Requêtes Google par jour, au maximum<small>30 par jour = 930 par mois au plus, sous les 1 000 gratuites</small></span>
               <input type="number" min="1" step="1" value={cap} onChange={(e) => setProfile({ ...profile, dailyCap: Math.max(1, Number(e.target.value) || 30) })} />
             </label>
-            <p className="hint">Filon refuse un scan qui ferait dépasser ce plafond. Garde le même chiffre dans les quotas de Google Cloud.</p>
-          </div>
+            <p className="hint">
+              {(() => {
+                const m = localUsage.month === new Date().toISOString().slice(0, 7) ? localUsage.calls : 0;
+                return `Ce mois-ci depuis cet appareil : ${m} requête${m > 1 ? "s" : ""}, dont ${usedToday} aujourd'hui. Garde le même plafond dans les quotas de Google Cloud.`;
+              })()}
+            </p>
+          </details>
 
-          <h2 className="set-h">Tes garanties et références</h2>
-          <p className="hint" style={{ marginTop: -4 }}>Utilisées dans l'argumentaire de chaque fiche. N'écris que ce que tu offres vraiment.</p>
-          <label className="field">Tes garanties (une par ligne)
-            <textarea value={profile.guarantees || ""} onChange={(e) => setProfile({ ...profile, guarantees: e.target.value })} placeholder={"Sans engagement de durée\nRetouches jusqu'à validation\nInterlocuteur unique, du premier rendez-vous à la mise en ligne"} />
-          </label>
-          <label className="field">Clients de référence (un par ligne, avec leur accord)
-            <textarea value={profile.references || ""} onChange={(e) => setProfile({ ...profile, references: e.target.value })} placeholder={"Nom du client, ville"} />
-          </label>
-
-          <h2 className="set-h">Tes tarifs</h2>
-          <p className="hint" style={{ marginTop: -4 }}>Prix de départ HT. Laisse vide ce que tu fais sur devis : ils servent à chiffrer les propositions.</p>
-          <div className="prices">
-            {SERVICES.map((sv) => (
-              <label key={sv.id} className="price-row">
-                <span>{sv.label}<small>{sv.family}</small></span>
-                <input
-                  type="number" inputMode="numeric" min="0" step="10" placeholder="Sur devis"
-                  value={profile.prices?.[sv.id] ?? ""}
-                  onChange={(e) => {
-                    const prices = { ...(profile.prices || {}) };
-                    if (e.target.value === "") delete prices[sv.id];
-                    else prices[sv.id] = Number(e.target.value);
-                    setProfile({ ...profile, prices });
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-          <label className="field">Ce que tu proposes ensuite (abonnement, suivi…)<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
-          <h2 className="set-h">Compte</h2>
-          {me?.mode === "comptes" && me.user ? (
-            <div className="set-block">
-              <p>Connecté en tant que <b>{me.user.email}</b>{me.user.role === "admin" ? " (administrateur)" : ""}. Ton pipeline et tes réglages sont synchronisés sur tous tes appareils.</p>
-              <div className="actions">
-                {me.user.role === "admin" && <button className="btn small" onClick={newInvite}>Inviter quelqu'un</button>}
-                <button className="btn ghost small" onClick={logout}>Se déconnecter</button>
-              </div>
-              {invite && (
-                <div className="invite">
-                  <p className="hint">Lien d'invitation valable 30 jours, utilisable une fois :</p>
-                  <input readOnly value={invite} onFocus={(e) => e.target.select()} aria-label="Lien d'invitation" />
+          <details className="set-sec">
+            <summary>Compte et sauvegarde</summary>
+            {me?.mode === "comptes" && me.user ? (
+              <>
+                <p>Connecté en tant que <b>{me.user.email}</b>{me.user.role === "admin" ? " (administrateur)" : ""}. Tout est synchronisé sur tes appareils.</p>
+                <div className="actions">
+                  {me.user.role === "admin" && <button className="btn small" onClick={newInvite}>Inviter quelqu'un</button>}
+                  <button className="btn ghost small" onClick={logout}>Se déconnecter</button>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="set-block">
-              <p>Filon fonctionne en mode simple : un mot de passe unique, et tes données restent dans ce navigateur.</p>
-              <p className="hint">Pour avoir des comptes et retrouver ton pipeline sur téléphone et ordinateur, branche une base Redis gratuite au projet dans Vercel (Storage). Les comptes s'activent tout seuls.</p>
-            </div>
-          )}
-
-          <h2 className="set-h">Sauvegarde</h2>
-          <div className="set-block">
-            <p>Télécharge ton pipeline, tes notes et tes réglages, ou restaure une sauvegarde.</p>
-            <div className="actions">
+                {invite && (
+                  <div className="invite">
+                    <p className="hint">Lien d'invitation valable 30 jours, utilisable une fois :</p>
+                    <input readOnly value={invite} onFocus={(e) => e.target.select()} aria-label="Lien d'invitation" />
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="hint">Mode simple : tes données restent dans ce navigateur. Pour les retrouver sur tous tes appareils, branche une base Upstash gratuite au projet dans Vercel (onglet Storage).</p>
+            )}
+            <div className="actions" style={{ marginTop: 10 }}>
               <button className="btn ghost small" onClick={exportAll}>Télécharger une sauvegarde</button>
               <label className="btn ghost small" style={{ cursor: "pointer" }}>
                 Importer une sauvegarde
                 <input type="file" accept="application/json" hidden onChange={(e) => importAll(e.target.files?.[0])} />
               </label>
+              {confirmReset ? (
+                <>
+                  <button className="btn small danger" onClick={() => { setLeads({}); setPipeline({}); setResult(null); setRecent([]); setConfirmReset(false); }}>Oui, tout effacer</button>
+                  <button className="btn ghost small" onClick={() => setConfirmReset(false)}>Annuler</button>
+                </>
+              ) : (
+                <button className="btn ghost small" onClick={() => setConfirmReset(true)}>Effacer les données</button>
+              )}
             </div>
             {importMsg && <p className="hint">{importMsg}</p>}
-          </div>
-
-          {confirmReset ? (
-            <div className="actions">
-              <span className="error">Tout effacer de ce navigateur ?</span>
-              <button className="btn small" onClick={() => { setLeads({}); setPipeline({}); setResult(null); setRecent([]); setConfirmReset(false); }}>Oui, effacer</button>
-              <button className="btn ghost small" onClick={() => setConfirmReset(false)}>Annuler</button>
-            </div>
-          ) : (
-            <button className="btn ghost small" onClick={() => setConfirmReset(true)}>Effacer les données de ce navigateur</button>
-          )}
+          </details>
         </main>
       )}
 

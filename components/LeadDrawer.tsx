@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Lead, PipelineEntry, Profile, Stage, Details, Dirigeant } from "../lib/types";
-import { STAGES, PRESENCE_LABEL } from "../lib/types";
+import { STAGES } from "../lib/types";
 import { getTrade } from "../lib/trades";
 import { visitScript, objections, emails, directMessages } from "../lib/generators";
 import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
@@ -138,63 +138,62 @@ export default function LeadDrawer({
   }
   const to = lead.audit?.email || "";
 
+  const st = siteStatus(lead);
+  const act = activity(created);
+  const legal = lead.legalName || dirs?.[0]?.company;
+  const [textTab, setTextTab] = useState<"visite" | "emails" | "messages">(plan.channel === "visite" ? "visite" : plan.channel === "email" ? "emails" : "messages");
+  const tq = ticketQuestion(lead.tradeId);
+  const price = prop.total || Number(((profile.price || "").match(/\d[\d\s]*/)?.[0] || "").replace(/\s/g, "")) || 0;
+  const r = roi(price, entry?.ticket || 0);
+
   return (
     <>
       <div className="drawer-bg" onClick={onClose} />
       <aside className="drawer" role="dialog" aria-label={`Fiche ${lead.name}`}>
-        <header>
+        <header className="d-head">
           <button className="close" onClick={onClose} aria-label="Fermer">×</button>
-          <span className={`tag ${lead.presence}`}>{PRESENCE_LABEL[lead.presence]}</span>
           <h2>{lead.name}</h2>
-          <p className="sub">{lead.category || trade.singular} à {lead.city}</p>
-          <dl className="facts">
-            <dt>Adresse</dt><dd>{lead.address}</dd>
-            <dt>Téléphone</dt><dd>{lead.phone || "Non communiqué"}</dd>
-            {to && (<><dt>E-mail</dt><dd>{to}</dd></>)}
-            <dt>Google</dt>
-            <dd>{lead.rating ? `${String(lead.rating).replace(".", ",")} / 5, ${lead.reviews} avis` : "Pas de note"}</dd>
-            {(() => {
-              const st = siteStatus(lead);
-              return (<><dt>Site web</dt><dd><span className={`cms ${st.kind === "wp" ? "wp" : ""}`}>{st.label}</span> <span className="hint">{st.detail}</span></dd></>);
-            })()}
-            {(() => {
-              const act = activity(lead.created || dirs?.[0]?.created);
-              const legal = lead.legalName || dirs?.[0]?.company;
-              return (<><dt>En activité</dt><dd>{act ? act.label : lead.registry === "none" || (dirs !== null && !dirs.length) ? "Introuvable dans le registre" : lead.id.startsWith("demo-") ? "Non disponible en démo" : "Recherche…"}{act && legal && <span className="hint"> · {legal}</span>}</dd></>);
-            })()}
-            <dt>Priorité</dt><dd>{lead.score} / 100</dd>
-          </dl>
-          <div className="actions">
+          <p className="sub">{lead.address.replace(/, France$/, "")}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+
+          <div className="d-facts">
+            <div><span>Site</span><b className={st.kind === "wp" ? "is-wp" : st.kind === "other" ? "is-other" : ""}>{st.label}</b></div>
+            <div><span>En activité</span><b>{act ? act.label.replace(/^Depuis /, "depuis ") : lead.id.startsWith("demo-") ? "—" : lead.registry === "none" || (dirs !== null && !dirs.length) ? "Inconnu" : "…"}</b></div>
+            <div><span>Google</span><b>{lead.rating ? `${String(lead.rating).replace(".", ",")} ★ · ${lead.reviews} avis` : "Pas de note"}</b></div>
+          </div>
+          {act && legal && <p className="hint legal">Registre : {legal}</p>}
+
+          <div className="d-actions">
             <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lead.address)}`} target="_blank" rel="noreferrer">Itinéraire</a>
-            <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(mails[0].subject)}&body=${encodeURIComponent(mails[0].body)}`}>Écrire un e-mail</a>
-            {lead.mapsUrl && <a className="btn ghost small" href={lead.mapsUrl} target="_blank" rel="noreferrer">Fiche Google</a>}
-            {lead.website && <a className="btn ghost small" href={lead.website} target="_blank" rel="noreferrer">Son site</a>}
-            {reportUrl && <a className="btn ghost small" href={reportUrl} target="_blank" rel="noreferrer">Rapport d'audit</a>}
-            {reportUrl && <Copy text={reportUrl} label="Copier le lien du rapport" />}
-            {lead.socialUrl && <a className="btn ghost small" href={lead.socialUrl} target="_blank" rel="noreferrer">Sa page</a>}
-            <a className="btn ghost small" href={`https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">Instagram</a>
+            <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(mails[0].subject)}&body=${encodeURIComponent(mails[0].body)}`}>E-mail</a>
+            {reportUrl && <Copy text={reportUrl} label="Lien du rapport d'audit" />}
+            <details className="more">
+              <summary className="btn ghost small">Plus</summary>
+              <div className="more-menu">
+                {lead.mapsUrl && <a href={lead.mapsUrl} target="_blank" rel="noreferrer">Fiche Google</a>}
+                {lead.website && <a href={lead.website} target="_blank" rel="noreferrer">Ouvrir son site</a>}
+                {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer">Voir le rapport d'audit</a>}
+                {lead.socialUrl && <a href={lead.socialUrl} target="_blank" rel="noreferrer">Sa page sur les réseaux</a>}
+                <a href={`https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">Chercher sur Instagram</a>
+                {lead.phone && <a href={`tel:${(lead.phoneIntl || lead.phone).replace(/\s/g, "")}`}>Appeler</a>}
+                {to && <span className="muted">E-mail : {to}</span>}
+              </div>
+            </details>
           </div>
         </header>
 
-        <section className="track">
+        <section className="d-track">
+          <div className="d-track-row">
+            <select value={entry?.stage || ""} onChange={(e) => onPipeline(e.target.value ? { stage: e.target.value as Stage } : null)} aria-label="Étape">
+              <option value="">+ Ajouter au pipeline</option>
+              {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <label className="d-date">Relance<input type="date" value={entry?.followUp || ""} disabled={!entry} onChange={(e) => onPipeline({ followUp: e.target.value })} /></label>
+          </div>
           <div className="quick">
-            <span className="hint">Contacté aujourd'hui par</span>
+            <span className="hint">Contacté aujourd'hui :</span>
             <button className="chip" onClick={() => markContacted("visite")}>Visite</button>
             <button className="chip" onClick={() => markContacted("email")}>E-mail</button>
             <button className="chip" onClick={() => markContacted("message")}>Message</button>
-          </div>
-          <div className="row2">
-            <label className="field">
-              Étape
-              <select value={entry?.stage || ""} onChange={(e) => onPipeline(e.target.value ? { stage: e.target.value as Stage } : null)}>
-                <option value="">Pas dans le pipeline</option>
-                {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              Relance prévue
-              <input type="date" value={entry?.followUp || ""} disabled={!entry} onChange={(e) => onPipeline({ followUp: e.target.value })} />
-            </label>
           </div>
           {entry?.stage === "signe" && (
             <label className="field">
@@ -202,164 +201,127 @@ export default function LeadDrawer({
               <input type="number" inputMode="numeric" min="0" step="10" value={entry.amount ?? ""} placeholder="ex. 1200" onChange={(e) => onPipeline({ amount: e.target.value ? Number(e.target.value) : undefined })} />
             </label>
           )}
-          <label className="field">
-            Notes
-            <textarea
-              value={entry?.notes || ""}
-              disabled={!entry}
-              placeholder={entry ? "Nom du gérant, objections, prochaine étape…" : "Ajoute l'entreprise au pipeline pour prendre des notes"}
-              onChange={(e) => onPipeline({ notes: e.target.value })}
-            />
-          </label>
-          {entry?.log?.length ? (
-            <details className="history">
-              <summary>Historique ({entry.log.length})</summary>
-              <ol>
-                {[...entry.log].reverse().map((h, i) => (
-                  <li key={h.at + i}>
-                    <time>{new Date(h.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</time> {h.text}
-                  </li>
-                ))}
-              </ol>
+          {entry && (
+            <details className="notes">
+              <summary>Notes{entry.notes ? " ✎" : ""}{entry.log?.length ? ` · historique (${entry.log.length})` : ""}</summary>
+              <textarea value={entry.notes || ""} placeholder="Nom du gérant, objections, prochaine étape…" onChange={(e) => onPipeline({ notes: e.target.value })} />
+              {entry.log?.length ? (
+                <ol className="history-list">
+                  {[...entry.log].reverse().map((h, i) => (
+                    <li key={h.at + i}><time>{new Date(h.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</time> {h.text}</li>
+                  ))}
+                </ol>
+              ) : null}
             </details>
-          ) : null}
+          )}
         </section>
 
         <div className="subtabs" role="tablist">
           {([
-            ["plan", "Plan d'approche"],
-            ["besoins", `Besoins (${needs.length})`],
-            ["visite", "Visite"],
-            ["emails", "E-mails"],
-            ["messages", "Messages"],
+            ["plan", "Approche"],
+            ["besoins", `Offre${picked.length ? ` (${picked.length})` : ""}`],
+            ["visite", "Textes"],
           ] as [Tab, string][]).map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
+            <button key={id} role="tab" aria-selected={tab === id || (id === "visite" && (tab === "emails" || tab === "messages"))} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
         {tab === "plan" && (
           <section className="plan">
-            <div className="verdict">
-              <span className="hint">Canal conseillé</span>
-              <strong>{CHANNEL_LABEL[plan.channel]}</strong>
-              <p>{plan.reasons.join(" ")}</p>
-              <span className="hint">Plan B : {CHANNEL_LABEL[plan.secondary].toLowerCase()}.</span>
-            </div>
-
-            <div className="plan-grid">
-              <div className="when">
-                <h3>Quand</h3>
-                <p className="big">{plan.slot.text}</p>
-                {plan.slot.next && <p>Prochain créneau : <b>{plan.slot.next}</b></p>}
-                <p className="hint">À éviter : {plan.avoid}.{plan.slot.known ? " Créneau croisé avec ses horaires Google." : " Horaires inconnus : vérifie sur sa fiche Google."}</p>
+            <div className="brief">
+              <div>
+                <span>Comment</span>
+                <b>{CHANNEL_LABEL[plan.channel]}</b>
               </div>
               <div>
-                <h3>À qui</h3>
-                <p>{plan.ask}</p>
-                {dirs === null ? (
-                  <button className="btn ghost small" onClick={loadDirigeant} disabled={busy === "dir"}>
-                    {busy === "dir" ? "Recherche…" : "Trouver le dirigeant"}
-                  </button>
-                ) : dirs.length ? (
-                  <div className="dirs">
-                    {dirs.slice(0, 2).map((d) => (
-                      <div key={d.siren} className="dir">
-                        <strong>{d.people.length ? d.people.slice(0, 2).map((x) => x.name).join(", ") : d.company}</strong>
-                        <small>
-                          {d.people[0]?.role ? `${d.people[0].role} · ` : ""}{d.company}{d.created ? `, créée en ${d.created.slice(0, 4)}` : ""}
-                        </small>
-                        <small>{d.address}</small>
-                      </div>
-                    ))}
-                    <p className="hint">Registre officiel des entreprises. Vérifie que l'adresse correspond avant d'utiliser le nom.</p>
-                  </div>
-                ) : (
-                  <p className="hint">Aucune correspondance dans le registre. <a href={`https://annuaire-entreprises.data.gouv.fr/rechercher?terme=${q}`} target="_blank" rel="noreferrer">Chercher à la main</a></p>
-                )}
+                <span>Quand</span>
+                <b>{plan.slot.next ? plan.slot.next.charAt(0).toUpperCase() + plan.slot.next.slice(1) : plan.slot.text}</b>
+              </div>
+              <div>
+                <span>À qui</span>
+                <b>{dirs?.[0]?.people?.[0]?.name || plan.ask.replace(/^Demande /, "").replace(/\.$/, "")}</b>
               </div>
             </div>
-
-            <h3>L'angle</h3>
             <p className="angle">{plan.angle}</p>
 
-            <div className="pitch">
-              <h3>1. La preuve, sur son propre téléphone</h3>
+            <details className="step-card" open>
+              <summary><i>1</i> Lui montrer, sur son téléphone</summary>
               <ol className="proof">{liveProof(lead).map((x) => <li key={x}>{x}</li>)}</ol>
+            </details>
 
-              <h3>2. Le calcul, avec ses chiffres</h3>
-              {(() => {
-                const tq = ticketQuestion(lead.tradeId);
-                const price = prop.total || Number(((profile.price || "").match(/\d[\d\s]*/)?.[0] || "").replace(/\s/g, "")) || 0;
-                const r = roi(price, entry?.ticket || 0);
-                return (
-                  <div className="roi">
-                    <p>Demande-lui : <b>{tq.ask}</b></p>
-                    <label className="roi-in">
-                      {tq.label}
-                      <input type="number" inputMode="numeric" min="0" step="10" placeholder="€" value={entry?.ticket ?? ""} onChange={(e) => onPipeline({ ticket: e.target.value ? Number(e.target.value) : undefined })} />
-                      €
-                    </label>
-                    {r ? <p className="roi-out">« {r.text} »</p> : <p className="hint">{price ? "Saisis sa réponse pour obtenir la phrase à lui dire." : "Coche des besoins (onglet Besoins) et renseigne tes tarifs pour chiffrer."}</p>}
-                  </div>
-                );
-              })()}
+            <details className="step-card" open>
+              <summary><i>2</i> Chiffrer avec lui</summary>
+              <div className="roi">
+                <p>Demande-lui : <b>{tq.ask}</b></p>
+                <label className="roi-in">
+                  {tq.label}
+                  <input type="number" inputMode="numeric" min="0" step="10" placeholder="€" value={entry?.ticket ?? ""} onChange={(e) => onPipeline({ ticket: e.target.value ? Number(e.target.value) : undefined })} />
+                  €
+                </label>
+                {r ? <p className="roi-out">« {r.text} »</p> : <p className="hint">{price ? "Saisis sa réponse pour obtenir la phrase à lui dire." : "Choisis ce que tu proposes dans l'onglet Offre pour chiffrer."}</p>}
+              </div>
+            </details>
 
-              <h3>3. Zéro risque pour lui</h3>
+            <details className="step-card" open={lines(profile.guarantees).length > 0}>
+              <summary><i>3</i> Lui enlever le risque</summary>
               {lines(profile.guarantees).length ? (
                 <ul className="facts-list">{lines(profile.guarantees).map((g) => <li key={g}>{g}</li>)}</ul>
               ) : (
-                <p className="hint">Ajoute tes garanties dans Réglages (uniquement celles que tu offres vraiment) : c'est ce qui fait tomber les dernières hésitations.</p>
+                <p className="hint">Ajoute tes garanties dans Réglages (seulement celles que tu offres vraiment).</p>
               )}
-              {lines(profile.references).length > 0 && (
-                <p className="refs">Ils m'ont fait confiance : {lines(profile.references).join(", ")}.</p>
-              )}
+              {lines(profile.references).length > 0 && <p className="refs">Ils m'ont fait confiance : {lines(profile.references).join(", ")}.</p>}
+            </details>
 
-              <h3>4. La question pour conclure</h3>
+            <details className="step-card" open>
+              <summary><i>4</i> Conclure</summary>
               <p className="angle">{closingLine(picked[0]?.title || needs[0]?.title, picked[0] ? profile.prices?.[picked[0].service] : undefined)}</p>
-            </div>
+            </details>
 
-            <h3>Tes arguments</h3>
-            <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}</ul>
-
-            <h3>Ce que tu proposes</h3>
-            <p>{plan.offer.charAt(0).toUpperCase() + plan.offer.slice(1)}. Ensuite : {profile.offer}.</p>
-            <p className="hint">Ses clients cherchent surtout : {plan.needs.join(", ")}.</p>
-
-            <h3>Ce que disent ses clients</h3>
-            {details?.reviews?.filter((r) => r.text).length ? (
-              <ul className="reviews">
-                {details.reviews!.filter((r) => r.text).slice(0, 3).map((r) => (
-                  <li key={r.author + r.when}>
-                    <p>« {r.text.replace(/\s+/g, " ").trim().slice(0, 240)}{r.text.length > 240 ? "…" : ""} »</p>
-                    <small>{r.author}, {r.rating}/5, {r.when}</small>
-                  </li>
-                ))}
-              </ul>
-            ) : details ? (
-              <p className="hint">Aucun avis rédigé disponible.</p>
-            ) : (
-              <button className="btn ghost small" onClick={loadReviews} disabled={busy === "avis"}>
-                {busy === "avis" ? "Chargement…" : "Voir ses derniers avis à citer"}
-              </button>
-            )}
-            {err && <p className="error">{err}</p>}
-
-            <h3>À préparer</h3>
-            <ul className="checklist">{plan.prep.map((x) => <li key={x}>{x}</li>)}</ul>
-
-            <h3>Objections probables</h3>
-            {objs.filter((o) => plan.likely.includes(o.id)).map((o) => (
-              <details className="obj" key={o.id} open><summary>{o.q}</summary><p>{o.a}</p></details>
-            ))}
-
-            <h3>Cadence</h3>
-            <ol className="cadence">{plan.cadence.map((c) => <li key={c}>{c}</li>)}</ol>
+            <h3 className="sec">Pour aller plus loin</h3>
+            <details className="fold">
+              <summary>Ses points faibles et tes arguments ({plan.facts.length})</summary>
+              <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}</ul>
+            </details>
+            <details className="fold">
+              <summary>Objections probables ({objs.filter((o) => plan.likely.includes(o.id)).length})</summary>
+              {objs.filter((o) => plan.likely.includes(o.id)).map((o) => (
+                <div className="obj-a" key={o.id}><b>{o.q}</b><p>{o.a}</p></div>
+              ))}
+            </details>
+            <details className="fold">
+              <summary>Créneau, dirigeant et préparation</summary>
+              <p><b>{plan.slot.text}.</b> À éviter : {plan.avoid}.{plan.slot.known ? "" : " Horaires inconnus : vérifie sur sa fiche Google."}</p>
+              <p>{plan.reasons.join(" ")} Plan B : {CHANNEL_LABEL[plan.secondary].toLowerCase()}.</p>
+              {dirs === null ? (
+                <button className="btn ghost small" onClick={loadDirigeant} disabled={busy === "dir"}>{busy === "dir" ? "Recherche…" : "Trouver le dirigeant"}</button>
+              ) : dirs.length ? (
+                <p>Dirigeant : <b>{dirs[0].people.slice(0, 2).map((x) => x.name).join(", ") || dirs[0].company}</b> <span className="hint">({dirs[0].company}, à vérifier)</span></p>
+              ) : (
+                <p className="hint">Dirigeant introuvable dans le registre.</p>
+              )}
+              <ul className="checklist">{plan.prep.map((x) => <li key={x}>{x}</li>)}</ul>
+              <ol className="cadence">{plan.cadence.map((c) => <li key={c}>{c}</li>)}</ol>
+            </details>
+            <details className="fold" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !details && busy !== "avis") loadReviews(); }}>
+              <summary>Ce que disent ses clients</summary>
+              {details?.reviews?.filter((x) => x.text).length ? (
+                <ul className="reviews">
+                  {details.reviews!.filter((x) => x.text).slice(0, 3).map((x) => (
+                    <li key={x.author + x.when}>
+                      <p>« {x.text.replace(/\s+/g, " ").trim().slice(0, 240)}{x.text.length > 240 ? "…" : ""} »</p>
+                      <small>{x.author}, {x.rating}/5, {x.when}</small>
+                    </li>
+                  ))}
+                </ul>
+              ) : details ? <p className="hint">Aucun avis rédigé disponible.</p> : <p className="hint">{busy === "avis" ? "Chargement… (1 requête Google)" : "S'ouvre en chargeant ses avis (1 requête Google)."}</p>}
+              {err && <p className="error">{err}</p>}
+            </details>
           </section>
         )}
 
         {tab === "besoins" && (
           <section className="needs">
-            <p className="hint" style={{ marginTop: 0 }}>Coche ce que tu veux lui proposer : la proposition se met à jour et se garde dans le pipeline.</p>
+            <p className="hint" style={{ marginTop: 0 }}>Coche ce que tu veux lui proposer. La proposition se calcule toute seule.</p>
             <ul className="need-list">
               {needs.map((n) => (
                 <li key={n.key} data-p={n.priority}>
@@ -377,7 +339,7 @@ export default function LeadDrawer({
             </ul>
             <div className="proposal">
               <div className="bh">
-                <b>Proposition</b>
+                <b>Proposition{prop.total ? ` · ${euro(prop.total)}` : ""}</b>
                 <span style={{ display: "flex", gap: 6 }}>
                   <Copy text={propText} />
                   {entry && prop.total > 0 && <button className="btn ghost small" onClick={() => onPipeline({ amount: prop.total })}>Reporter le montant</button>}
@@ -389,41 +351,46 @@ export default function LeadDrawer({
           </section>
         )}
 
-        {tab === "visite" && (
+        {(tab === "visite" || tab === "emails" || tab === "messages") && (
           <section>
-            <p className="hint" style={{ marginTop: 0 }}>Pour passer en boutique : {plan.slot.text.toLowerCase()}.</p>
-            {script.map((s) => (
-              <div className="step" key={s.step}><span>{s.step}</span><p>{s.text}</p></div>
-            ))}
-            <div style={{ marginBottom: 16 }}><Copy text={script.map((s) => `${s.step} : ${s.text}`).join("\n\n")} label="Copier le script" /></div>
-            <h3 className="h3">Toutes les objections</h3>
-            {objs.map((o) => (
-              <details className="obj" key={o.id}><summary>{o.q}</summary><p>{o.a}</p></details>
-            ))}
-          </section>
-        )}
+            <div className="seg-mini" role="tablist">
+              {([["visite", "En boutique"], ["emails", "E-mails"], ["messages", "Messages"]] as const).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={textTab === id} onClick={() => setTextTab(id)}>{label}{plan.channel === (id === "emails" ? "email" : id === "messages" ? "message" : "visite") ? " ★" : ""}</button>
+              ))}
+            </div>
 
-        {tab === "emails" && (
-          <section>
-            {!to && <p className="hint" style={{ marginTop: 0 }}>Pas d'e-mail trouvé : cherche-le sur sa page ou demande-le lors de ta visite.</p>}
-            {mails.map((m) => (
-              <div className="block" key={m.label}>
-                <div className="bh">
-                  <span><b>{m.label}</b> · {m.subject}</span>
-                  <span style={{ display: "flex", gap: 6 }}>
-                    <Copy text={`${m.subject}\n\n${m.body}`} />
-                    <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`}>Ouvrir</a>
-                  </span>
-                </div>
-                <pre>{m.body}</pre>
-              </div>
-            ))}
-          </section>
-        )}
+            {textTab === "visite" && (
+              <>
+                {script.map((x) => (
+                  <div className="step" key={x.step}><span>{x.step}</span><p>{x.text}</p></div>
+                ))}
+                <div style={{ margin: "4px 0 16px" }}><Copy text={script.map((x) => `${x.step} : ${x.text}`).join("\n\n")} label="Copier le script" /></div>
+                <details className="fold">
+                  <summary>Toutes les réponses aux objections ({objs.length})</summary>
+                  {objs.map((o) => <div className="obj-a" key={o.id}><b>{o.q}</b><p>{o.a}</p></div>)}
+                </details>
+              </>
+            )}
 
-        {tab === "messages" && (
-          <section>
-            {directMessages(lead, profile).map((m) => (
+            {textTab === "emails" && (
+              <>
+                {!to && <p className="hint" style={{ marginTop: 0 }}>Pas d'e-mail trouvé : cherche-le sur sa page ou demande-le lors de ta visite.</p>}
+                {mails.map((m, i) => (
+                  <details className="block" key={m.label} open={i === 0}>
+                    <summary className="bh">
+                      <span><b>{m.label}</b> · {m.subject}</span>
+                      <span style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                        <Copy text={`${m.subject}\n\n${m.body}`} />
+                        <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`}>Ouvrir</a>
+                      </span>
+                    </summary>
+                    <pre>{m.body}</pre>
+                  </details>
+                ))}
+              </>
+            )}
+
+            {textTab === "messages" && directMessages(lead, profile).map((m) => (
               <div className="block" key={m.label}>
                 <div className="bh"><b>{m.label}</b><Copy text={m.body} /></div>
                 <pre>{m.body}</pre>

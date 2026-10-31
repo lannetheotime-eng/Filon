@@ -24,3 +24,12 @@ export function activity(created?: string) {
     label: years < 1 ? `Créée en ${since}, moins d'un an` : `Depuis ${since}, ${years} an${years > 1 ? "s" : ""}`,
   };
 }
+
+// Une seule étiquette qui résume la situation, pour la liste
+export function rowStatus(l: Lead): { label: string; tone: "none" | "social" | "old" | "ok" | "wp" } {
+  const cms = l.audit?.cms;
+  if (l.presence === "aucun") return { label: "Pas de site", tone: "none" };
+  if (l.presence === "reseaux") return { label: "Réseaux seulement", tone: "social" };
+  if (l.presence === "vieux") return { label: `${cms || "Site"} à refaire`, tone: cms === "WordPress" ? "wp" : "old" };
+  return { label: `${cms || "Site"} correct`, tone: cms === "WordPress" ? "wp" : "ok" };
+}
