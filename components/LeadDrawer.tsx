@@ -7,6 +7,7 @@ import { visitScript, objections, emails, directMessages } from "../lib/generato
 import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
 import { encodeReport } from "../lib/report";
 import { detectNeeds, proposal } from "../lib/needs";
+import { liveProof, roi, closingLine, ticketQuestion, lines } from "../lib/pitch";
 
 type Tab = "plan" | "besoins" | "visite" | "emails" | "messages";
 
@@ -268,6 +269,42 @@ export default function LeadDrawer({
 
             <h3>L'angle</h3>
             <p className="angle">{plan.angle}</p>
+
+            <div className="pitch">
+              <h3>1. La preuve, sur son propre téléphone</h3>
+              <ol className="proof">{liveProof(lead).map((x) => <li key={x}>{x}</li>)}</ol>
+
+              <h3>2. Le calcul, avec ses chiffres</h3>
+              {(() => {
+                const tq = ticketQuestion(lead.tradeId);
+                const price = prop.total || Number(((profile.price || "").match(/\d[\d\s]*/)?.[0] || "").replace(/\s/g, "")) || 0;
+                const r = roi(price, entry?.ticket || 0);
+                return (
+                  <div className="roi">
+                    <p>Demande-lui : <b>{tq.ask}</b></p>
+                    <label className="roi-in">
+                      {tq.label}
+                      <input type="number" inputMode="numeric" min="0" step="10" placeholder="€" value={entry?.ticket ?? ""} onChange={(e) => onPipeline({ ticket: e.target.value ? Number(e.target.value) : undefined })} />
+                      €
+                    </label>
+                    {r ? <p className="roi-out">« {r.text} »</p> : <p className="hint">{price ? "Saisis sa réponse pour obtenir la phrase à lui dire." : "Coche des besoins (onglet Besoins) et renseigne tes tarifs pour chiffrer."}</p>}
+                  </div>
+                );
+              })()}
+
+              <h3>3. Zéro risque pour lui</h3>
+              {lines(profile.guarantees).length ? (
+                <ul className="facts-list">{lines(profile.guarantees).map((g) => <li key={g}>{g}</li>)}</ul>
+              ) : (
+                <p className="hint">Ajoute tes garanties dans Réglages (uniquement celles que tu offres vraiment) : c'est ce qui fait tomber les dernières hésitations.</p>
+              )}
+              {lines(profile.references).length > 0 && (
+                <p className="refs">Ils m'ont fait confiance : {lines(profile.references).join(", ")}.</p>
+              )}
+
+              <h3>4. La question pour conclure</h3>
+              <p className="angle">{closingLine(picked[0]?.title || needs[0]?.title, picked[0] ? profile.prices?.[picked[0].service] : undefined)}</p>
+            </div>
 
             <h3>Tes arguments</h3>
             <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}</ul>

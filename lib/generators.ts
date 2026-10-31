@@ -90,6 +90,31 @@ export function objections(l: Lead, p: Profile) {
       a: `Vous n'avez presque rien à faire : je reprends vos infos Google et vos photos, je m'occupe de la mise en ligne et de l'entretien. Vous validez, c'est tout.`,
     },
     {
+      id: "reflechir",
+      q: "« Je vais réfléchir. »",
+      a: `Bien sûr. Pour vous aider à réfléchir : qu'est-ce qui vous fait hésiter, le prix, le temps, ou l'utilité ? (Écoute la réponse : c'est la vraie objection, traite-la avec la réponse correspondante.)`,
+    },
+    {
+      id: "budget",
+      q: "« Pas de budget en ce moment. »",
+      a: `Je comprends. On peut commencer par une seule chose, la plus utile pour vous, et étaler le reste. Si un client en plus suffit à rembourser cette première étape, ce n'est plus vraiment une dépense.`,
+    },
+    {
+      id: "bouche",
+      q: "« Mes clients viennent par le bouche-à-oreille. »",
+      a: `C'est le meilleur signe. Mais aujourd'hui, quand quelqu'un entend parler de vous, son premier réflexe est de vous chercher sur Google pour vérifier. Le site, c'est ce qui transforme cette recommandation en visite.`,
+    },
+    {
+      id: "neveu",
+      q: "« Quelqu'un de ma famille peut me le faire. »",
+      a: `C'est souvent une bonne idée pour démarrer. La différence, c'est le suivi : les mises à jour, la sécurité, la visibilité sur Google dans un an. Si vous voulez, je regarde ce qu'il vous propose et je vous dis honnêtement ce que j'en pense.`,
+    },
+    {
+      id: "arnaque",
+      q: "« J'ai déjà eu une mauvaise expérience. »",
+      a: `C'est fréquent, malheureusement. C'est pour ça que je travaille seul, avec un seul interlocuteur, un devis clair et rien de caché. Je peux vous montrer des réalisations et vous mettre en contact avec des clients.`,
+    },
+    {
       id: "mail",
       q: "« Envoyez-moi un mail. »",
       a: `Avec plaisir. Je vous envoie quelques réalisations de ${t.label.toLowerCase()} et d'autres commerces. Je repasse en fin de semaine pour avoir votre avis ?`,

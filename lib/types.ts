@@ -86,6 +86,7 @@ export type PipelineEntry = {
   channel?: "email" | "visite" | "message" | "appel";
   needs?: string[]; // besoins retenus pour la proposition
   log?: { at: string; text: string }[]; // historique des actions
+  ticket?: number; // ce que rapporte un client au gérant (donné par lui)
 };
 
 export type ScanResult = {
@@ -116,6 +117,8 @@ export type Profile = {
   portfolio: string;
   prices?: Record<string, number>; // tarifs par prestation
   dailyCap?: number; // plafond de requêtes Google par jour (30 = reste dans le gratuit)
+  guarantees?: string; // une garantie par ligne (uniquement ce que tu offres vraiment)
+  references?: string; // un client de référence par ligne
 };
 
 export const DEFAULT_PROFILE: Profile = {

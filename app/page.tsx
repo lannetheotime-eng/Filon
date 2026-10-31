@@ -535,6 +535,15 @@ export default function Home() {
             <p className="hint">Filon refuse un scan qui ferait dépasser ce plafond. Garde le même chiffre dans les quotas de Google Cloud.</p>
           </div>
 
+          <h2 className="set-h">Tes garanties et références</h2>
+          <p className="hint" style={{ marginTop: -4 }}>Utilisées dans l'argumentaire de chaque fiche. N'écris que ce que tu offres vraiment.</p>
+          <label className="field">Tes garanties (une par ligne)
+            <textarea value={profile.guarantees || ""} onChange={(e) => setProfile({ ...profile, guarantees: e.target.value })} placeholder={"Sans engagement de durée\nRetouches jusqu'à validation\nInterlocuteur unique, du premier rendez-vous à la mise en ligne"} />
+          </label>
+          <label className="field">Clients de référence (un par ligne, avec leur accord)
+            <textarea value={profile.references || ""} onChange={(e) => setProfile({ ...profile, references: e.target.value })} placeholder={"Nom du client, ville"} />
+          </label>
+
           <h2 className="set-h">Tes tarifs</h2>
           <p className="hint" style={{ marginTop: -4 }}>Prix de départ HT. Laisse vide ce que tu fais sur devis : ils servent à chiffrer les propositions.</p>
           <div className="prices">

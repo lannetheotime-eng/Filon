@@ -283,7 +283,7 @@ export function approachPlan(l: Lead, p: Profile, created?: string) {
 
   // Objections les plus probables
   const likely =
-    l.presence === "equipe" ? ["prestataire", "cher"] : l.presence === "vieux" ? ["deja-site", "prestataire"] : l.presence === "reseaux" ? ["facebook", "temps"] : reviews >= 50 ? ["clients", "cher"] : ["cher", "temps"];
+    (l.presence === "equipe" ? ["prestataire", "cher"] : l.presence === "vieux" ? ["deja-site", "prestataire"] : l.presence === "reseaux" ? ["facebook", "temps"] : reviews >= 50 ? ["clients", "bouche"] : ["cher", "temps"]).concat(["reflechir"]);
 
   const cadence =
     channel === "visite"
