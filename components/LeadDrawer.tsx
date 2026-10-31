@@ -6,8 +6,9 @@ import { getTrade } from "../lib/trades";
 import { visitScript, objections, emails, directMessages } from "../lib/generators";
 import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
 import { encodeReport } from "../lib/report";
+import { detectNeeds, proposal } from "../lib/needs";
 
-type Tab = "plan" | "visite" | "emails" | "messages";
+type Tab = "plan" | "besoins" | "visite" | "emails" | "messages";
 
 function Copy({ text, label = "Copier" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -102,7 +103,25 @@ export default function LeadDrawer({
   const mails = emails(lead, profile, reportUrl);
   const script = visitScript(lead, profile);
   const objs = objections(lead, profile);
-  const plan = approachPlan(lead, profile);
+  const created = dirs?.[0]?.created;
+  const plan = approachPlan(lead, profile, created);
+  const needs = detectNeeds(lead, { created });
+  const chosen = entry?.needs ?? needs.filter((n) => n.priority === 1).map((n) => n.key);
+  const picked = needs.filter((n) => chosen.includes(n.key));
+  const prop = proposal(picked, profile.prices || {});
+  const euro = (v: number) => v.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const propText = [
+    `Proposition pour ${lead.name}`,
+    "",
+    ...prop.lines.map((x) => `• ${x.title}${x.price != null ? ` : ${euro(x.price)}` : " : sur devis"}`),
+    "",
+    prop.lines.length ? `Total${prop.complete ? "" : " (hors éléments sur devis)"} : ${euro(prop.total)} HT` : "",
+    profile.offer ? `Ensuite : ${profile.offer}.` : "",
+  ].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
+  function toggleNeed(key: string) {
+    const next = chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key];
+    onPipeline({ needs: next });
+  }
   const to = lead.audit?.email || "";
 
   return (
@@ -120,6 +139,7 @@ export default function LeadDrawer({
             {to && (<><dt>E-mail</dt><dd>{to}</dd></>)}
             <dt>Google</dt>
             <dd>{lead.rating ? `${String(lead.rating).replace(".", ",")} / 5, ${lead.reviews} avis` : "Pas de note"}</dd>
+            {lead.audit?.cms && (<><dt>Site fait avec</dt><dd><span className={`cms ${lead.audit.cms === "WordPress" ? "wp" : ""}`}>{lead.audit.cms}{lead.audit.cmsVersion ? ` ${lead.audit.cmsVersion}` : ""}</span>{lead.audit.cms === "WordPress" ? " : tu peux intervenir dessus" : " : pas WordPress"}</dd></>)}
             <dt>Priorité</dt><dd>{lead.score} / 100</dd>
           </dl>
           <div className="actions">
@@ -174,6 +194,7 @@ export default function LeadDrawer({
         <div className="subtabs" role="tablist">
           {([
             ["plan", "Plan d'approche"],
+            ["besoins", `Besoins (${needs.length})`],
             ["visite", "Visite"],
             ["emails", "E-mails"],
             ["messages", "Messages"],
@@ -263,6 +284,38 @@ export default function LeadDrawer({
 
             <h3>Cadence</h3>
             <ol className="cadence">{plan.cadence.map((c) => <li key={c}>{c}</li>)}</ol>
+          </section>
+        )}
+
+        {tab === "besoins" && (
+          <section className="needs">
+            <p className="hint" style={{ marginTop: 0 }}>Coche ce que tu veux lui proposer : la proposition se met à jour et se garde dans le pipeline.</p>
+            <ul className="need-list">
+              {needs.map((n) => (
+                <li key={n.key} data-p={n.priority}>
+                  <label>
+                    <input type="checkbox" checked={chosen.includes(n.key)} onChange={() => toggleNeed(n.key)} />
+                    <span>
+                      <b>{n.title}</b>
+                      <small>{n.why}</small>
+                      {n.deadline && <em>À livrer avant le {new Date(n.deadline + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}</em>}
+                    </span>
+                    <span className="need-price">{profile.prices?.[n.service] != null ? euro(profile.prices[n.service]) : "Sur devis"}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="proposal">
+              <div className="bh">
+                <b>Proposition</b>
+                <span style={{ display: "flex", gap: 6 }}>
+                  <Copy text={propText} />
+                  {entry && prop.total > 0 && <button className="btn ghost small" onClick={() => onPipeline({ amount: prop.total })}>Reporter le montant</button>}
+                </span>
+              </div>
+              <pre>{picked.length ? propText : "Coche au moins un besoin."}</pre>
+              {!Object.keys(profile.prices || {}).length && <p className="hint">Renseigne tes tarifs dans Réglages pour chiffrer automatiquement.</p>}
+            </div>
           </section>
         )}
 

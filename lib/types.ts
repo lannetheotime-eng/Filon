@@ -1,5 +1,6 @@
 // "reseaux" = Facebook, Instagram, annuaire… mais pas de vrai site ; "vieux" = un site existe mais il est à refaire
-export type WebPresence = "aucun" | "reseaux" | "vieux";
+// "equipe" = un site correct : prospect pour la maintenance, l'identité ou le print
+export type WebPresence = "aucun" | "reseaux" | "vieux" | "equipe";
 
 export type SiteAudit = {
   score: number; // 0 à 100 : plus c'est haut, plus le site est à refaire
@@ -9,12 +10,15 @@ export type SiteAudit = {
   url: string;
   email?: string;
   lastYear?: number;
+  cms?: string; // WordPress, Wix, Shopify…
+  cmsVersion?: string;
 };
 
 export const PRESENCE_LABEL: Record<WebPresence, string> = {
   aucun: "Aucun site",
   reseaux: "Réseaux seulement",
   vieux: "Site à refaire",
+  equipe: "Site correct",
 };
 
 export type Lead = {
@@ -37,6 +41,7 @@ export type Lead = {
   category?: string;
   hours?: string[];
   openPeriods?: OpenPeriod[];
+  photoCount?: number; // photos sur la fiche Google (10 maximum renvoyées)
   context?: LeadContext;
   score: number;
   foundAt: string;
@@ -79,6 +84,7 @@ export type PipelineEntry = {
   amount?: number; // montant signé, en euros
   contactedAt?: string;
   channel?: "email" | "visite" | "message" | "appel";
+  needs?: string[]; // besoins retenus pour la proposition
 };
 
 export type ScanResult = {
@@ -107,6 +113,7 @@ export type Profile = {
   offer: string;
   price: string;
   portfolio: string;
+  prices?: Record<string, number>; // tarifs par prestation
 };
 
 export const DEFAULT_PROFILE: Profile = {

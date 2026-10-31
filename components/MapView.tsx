@@ -54,7 +54,8 @@ export default function MapView({
       aucun: css.getPropertyValue("--mark").trim() || "#154dff",
       reseaux: css.getPropertyValue("--social").trim() || "#b26a00",
       vieux: css.getPropertyValue("--old").trim() || "#7a3df0",
-    };
+      equipe: css.getPropertyValue("--ink-3").trim() || "#8a8a8a",
+    } as Record<string, string>;
     const pts: [number, number][] = [];
     for (const l of leads) {
       const active = l.id === activeId;

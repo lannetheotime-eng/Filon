@@ -2,6 +2,7 @@
 import type { Lead, PipelineEntry, Stage } from "../lib/types";
 import { STAGES } from "../lib/types";
 import { getTrade } from "../lib/trades";
+import { detectNeeds, serviceLabel } from "../lib/needs";
 
 const CONTACTED: Stage[] = ["contacte", "a_relancer", "rdv", "signe", "perdu"];
 const euro = (n: number) => n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -10,10 +11,12 @@ export default function Dashboard({
   leads,
   pipeline,
   onOpen,
+  prices,
 }: {
   leads: Record<string, Lead>;
   pipeline: Record<string, PipelineEntry>;
   onOpen: (id: string) => void;
+  prices: Record<string, number>;
 }) {
   const ids = Object.keys(pipeline).filter((id) => leads[id]);
   const today = new Date().toISOString().slice(0, 10);
@@ -28,6 +31,20 @@ export default function Dashboard({
   const due = ids
     .filter((id) => pipeline[id].followUp && pipeline[id].followUp! <= today && !["signe", "perdu"].includes(pipeline[id].stage))
     .sort((a, b) => pipeline[a].followUp!.localeCompare(pipeline[b].followUp!));
+
+  // Potentiel : besoins retenus sur les dossiers en cours, chiffrés avec tes tarifs
+  const open = ids.filter((id) => !["signe", "perdu"].includes(pipeline[id].stage));
+  const demand = new Map<string, number>();
+  let potential = 0;
+  for (const id of open) {
+    const all = detectNeeds(leads[id]);
+    const keys = pipeline[id].needs ?? all.filter((n) => n.priority === 1).map((n) => n.key);
+    for (const n of all.filter((x) => keys.includes(x.key))) {
+      potential += prices[n.service] || 0;
+      demand.set(n.service, (demand.get(n.service) || 0) + 1);
+    }
+  }
+  const topDemand = [...demand.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
 
   const byStage = STAGES.map((s) => ({ ...s, n: ids.filter((id) => pipeline[id].stage === s.id).length }));
   const max = Math.max(1, ...byStage.map((s) => s.n));
@@ -59,6 +76,7 @@ export default function Dashboard({
         <div className="kpi"><span>Contactées</span><strong>{contacted.length}</strong><small>dont {thisWeek} cette semaine</small></div>
         <div className="kpi"><span>Rendez-vous</span><strong>{rdv.length}</strong><small>{contacted.length ? Math.round((rdv.length / contacted.length) * 100) : 0} % des contacts</small></div>
         <div className="kpi"><span>Signées</span><strong>{signed.length}</strong><small>{conv} % de conversion</small></div>
+        <div className="kpi"><span>Potentiel en cours</span><strong>{euro(potential)}</strong><small>{Object.keys(prices).length ? `${open.length} dossiers ouverts` : "Renseigne tes tarifs dans Réglages"}</small></div>
         <div className="kpi accent"><span>Chiffre signé</span><strong>{euro(revenue)}</strong><small>{signed.length ? `${euro(Math.round(revenue / signed.length))} en moyenne` : "Renseigne le montant à la signature"}</small></div>
       </div>
 
@@ -108,6 +126,22 @@ export default function Dashboard({
             </tbody>
           </table>
           <p className="hint">Indique le canal dans la fiche quand tu contactes une entreprise.</p>
+        </section>
+
+        <section className="panel-b">
+          <h2>Ce que tes prospects demandent</h2>
+          {topDemand.length ? (
+            <table className="mini">
+              <thead><tr><th>Prestation</th><th>Dossiers</th><th>Valeur</th></tr></thead>
+              <tbody>
+                {topDemand.map(([sv, n]) => (
+                  <tr key={sv}><td>{serviceLabel(sv)}</td><td>{n}</td><td>{prices[sv] ? euro(prices[sv] * n) : "—"}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="hint">Les besoins de tes dossiers en cours apparaîtront ici.</p>
+          )}
         </section>
 
         <section className="panel-b">

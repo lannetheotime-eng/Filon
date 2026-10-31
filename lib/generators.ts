@@ -1,5 +1,6 @@
 import type { Lead, Profile } from "./types";
 import { getTrade } from "./trades";
+import { detectNeeds } from "./needs";
 
 const signature = (p: Profile) =>
   [(p.firstName || "") + (p.studio ? ` · ${p.studio}` : ""), p.phone, p.email, p.site].filter(Boolean).join("\n");
@@ -10,7 +11,13 @@ function reviewsLine(l: Lead) {
 }
 
 // Le constat, formulé selon la situation de l'entreprise
+const topNeed = (l: Lead) => detectNeeds(l).find((n) => !["site", "refonte", "migration"].includes(n.service));
+
 function gap(l: Lead) {
+  if (l.presence === "equipe") {
+    const t = topNeed(l);
+    return t ? `je pense que je peux vous aider sur autre chose : ${t.title.charAt(0).toLowerCase() + t.title.slice(1)}` : "je travaille aussi sur tout ce qui est imprimé et l'identité visuelle";
+  }
   if (l.presence === "vieux") {
     const top = (l.audit?.issues || []).slice(0, 2).map((i) => i.charAt(0).toLowerCase() + i.slice(1));
     return top.length ? `votre site existe, mais ${top.join(" et ")}` : "votre site mériterait un coup de neuf";
@@ -31,7 +38,10 @@ export function visitScript(l: Lead, p: Profile) {
     },
     {
       step: "Le constat",
-      text: `Je suis tombé sur votre fiche Google${proof ? ` : ${proof}, vos clients vous adorent` : ""}. Par contre, ${gap(l)}. Aujourd'hui, ${t.hookDetail}.`,
+      text:
+        l.presence === "equipe"
+          ? `Je suis tombé sur votre fiche Google${proof ? ` : ${proof}, vos clients vous adorent` : ""}. Votre site est bien fait, mais ${gap(l)}.`
+          : `Je suis tombé sur votre fiche Google${proof ? ` : ${proof}, vos clients vous adorent` : ""}. Par contre, ${gap(l)}. Aujourd'hui, ${t.hookDetail}.`,
     },
     {
       step: "Montrer",
@@ -93,8 +103,26 @@ export function emails(l: Lead, p: Profile, reportUrl?: string) {
   const t = getTrade(l.tradeId)!;
   const intro = `Je suis ${p.firstName}${p.studio ? `, de ${p.studio}` : ""}, graphiste près de chez vous.`;
   const close = `Je serais ravi de vous montrer quelques réalisations${work(p)} et d'en parler dix minutes, sans engagement.\n\nJe propose ${p.offer}.`;
+  const tn = topNeed(l);
   const first =
-    l.presence === "vieux"
+    l.presence === "equipe" && tn
+      ? {
+          label: "Premier contact",
+          subject: `${tn.title} : une idée pour ${l.name}`,
+          body: `Bonjour,
+
+${intro}
+
+En cherchant ${t.singular} à ${l.city}, je suis tombé sur ${l.name}${proof ? ` (${proof} sur Google, bravo)` : ""}. Votre site est bien fait, mais je pense pouvoir vous aider sur autre chose : ${tn.title.charAt(0).toLowerCase() + tn.title.slice(1)}.
+
+${tn.why}
+
+${close}
+
+Bonne journée,
+${signature(p)}`,
+        }
+      : l.presence === "vieux"
       ? {
           label: "Premier contact",
           subject: `Votre site ${l.name}, vu depuis un téléphone`,

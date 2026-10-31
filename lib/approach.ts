@@ -1,5 +1,6 @@
 import type { Lead, Profile, OpenPeriod } from "./types";
 import { getTrade } from "./trades";
+import { detectNeeds } from "./needs";
 
 export type Channel = "visite" | "email" | "message";
 
@@ -203,7 +204,7 @@ const n = (x?: number) => String(x ?? "").replace(".", ",");
 const network = (url?: string) =>
   !url ? "" : /instagram/i.test(url) ? "Instagram" : /facebook|fb\.com/i.test(url) ? "Facebook" : /tiktok/i.test(url) ? "TikTok" : "un annuaire";
 
-export function approachPlan(l: Lead, p: Profile) {
+export function approachPlan(l: Lead, p: Profile, created?: string) {
   const t = getTrade(l.tradeId)!;
   const a = APPROACH[l.tradeId] || SHOP({ offer: "un site vitrine clair et bien placé sur Google", needs: ["les horaires", "les services", "le contact"] });
 
@@ -214,7 +215,7 @@ export function approachPlan(l: Lead, p: Profile) {
     channel = "message";
     reasons.push("Il est actif sur Instagram : écris-lui là-bas.");
   }
-  if (l.presence === "vieux" && l.audit?.email && channel === "email") {
+  if ((l.presence === "vieux" || l.presence === "equipe") && l.audit?.email && channel === "email") {
     reasons.push(`Son e-mail est affiché sur son site : ${l.audit.email}.`);
   }
   if (channel === "email" && !l.audit?.email) {
@@ -225,8 +226,15 @@ export function approachPlan(l: Lead, p: Profile) {
 
   // Angle
   const reviews = l.reviews || 0;
+  const needs = detectNeeds(l, { created });
+  const top = needs.filter((x) => x.priority <= 2).slice(0, 3);
+  const cms = l.audit?.cms;
   const angle =
-    l.presence === "vieux"
+    l.presence === "equipe"
+      ? `Son site tient la route : ne lui parle pas de site. Ouvre avec un besoin concret${top[0] ? ` : ${top[0].title.charAt(0).toLowerCase() + top[0].title.slice(1)}` : ""}.`
+      : l.presence === "vieux" && cms && cms !== "WordPress"
+      ? `Son site est fait avec ${cms} : impossible de le reprendre, mais c'est souvent justement ce qui le bloque (modèle figé, peu visible sur Google). Propose un site WordPress à lui, qu'il pourra faire évoluer.`
+      : l.presence === "vieux"
       ? `Il a déjà investi dans un site : inutile de le convaincre qu'il en faut un. Montre-lui ce que le sien lui fait perdre.`
       : l.presence === "reseaux"
       ? `Il communique déjà sur ${network(l.socialUrl)} : il sait que la visibilité compte. Le site devient une vitrine qui lui appartient et que Google met en avant.`
@@ -243,13 +251,19 @@ export function approachPlan(l: Lead, p: Profile) {
     );
   if (l.context?.siteShare != null && (l.context.total || 0) >= 5)
     facts.push(`${l.context.siteShare} % des ${t.label.toLowerCase()} analysées à ${l.city} ont un site correct.`);
+  if (cms)
+    facts.push(
+      `Son site est fait avec ${cms}${l.audit?.cmsVersion ? ` ${l.audit.cmsVersion}` : ""}${cms === "WordPress" ? " : tu peux intervenir dessus directement." : " : pas WordPress, il faudra repartir de zéro."}`
+    );
   if (l.audit?.issues.length) for (const i of l.audit.issues.slice(0, 4)) facts.push(`Son site : ${i.charAt(0).toLowerCase() + i.slice(1)}.`);
+  if (l.photoCount != null && l.photoCount < 5) facts.push(`Seulement ${l.photoCount} photo${l.photoCount > 1 ? "s" : ""} sur sa fiche Google.`);
   if (l.presence === "reseaux") facts.push(`Sa seule présence en ligne est sur ${network(l.socialUrl)}.`);
   if (slot.known && slot.closed.length) facts.push(`Fermé le ${slot.closed.join(" et le ")}.`);
 
   // Offre
-  const first =
-    l.presence === "vieux"
+  const first = top.length
+    ? top.map((x) => x.title.charAt(0).toLowerCase() + x.title.slice(1)).join(", puis ")
+    : l.presence === "vieux"
       ? `une refonte de son site${l.audit?.mobile === false ? ", pensée d'abord pour le téléphone" : ""}${l.audit?.https === false ? " et sécurisée" : ""}`
       : l.presence === "reseaux"
       ? `${a.offer}, relié à sa page ${network(l.socialUrl)}`
@@ -266,7 +280,7 @@ export function approachPlan(l: Lead, p: Profile) {
 
   // Objections les plus probables
   const likely =
-    l.presence === "vieux" ? ["deja-site", "prestataire"] : l.presence === "reseaux" ? ["facebook", "temps"] : reviews >= 50 ? ["clients", "cher"] : ["cher", "temps"];
+    l.presence === "equipe" ? ["prestataire", "cher"] : l.presence === "vieux" ? ["deja-site", "prestataire"] : l.presence === "reseaux" ? ["facebook", "temps"] : reviews >= 50 ? ["clients", "cher"] : ["cher", "temps"];
 
   const cadence =
     channel === "visite"

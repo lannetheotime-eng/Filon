@@ -6,6 +6,7 @@ import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } fro
 import { DEFAULT_PROFILE, PRESENCE_LABEL } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
 import { mergeData, toSync, type SyncData } from "../lib/sync";
+import { detectNeeds, SERVICES } from "../lib/needs";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
@@ -45,6 +46,8 @@ export default function Home() {
   const [city, setCity] = usePersistent("filon.city", "Toulouse");
   const [deep, setDeep] = usePersistent("filon.deep", false);
   const [includeOld, setIncludeOld] = usePersistent("filon.old", true);
+  const [includeAll, setIncludeAll] = usePersistent("filon.all", false);
+  const [wpOnly, setWpOnly] = useState(false);
   const [recent, setRecent] = usePersistent<Recent[]>("filon.recent", []);
   const [result, setResult] = usePersistent<ScanResult | null>("filon.last", null);
   const [leads, setLeads] = usePersistent<Record<string, Lead>>("filon.leads", {});
@@ -148,7 +151,7 @@ export default function Home() {
       const r = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld }),
+        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld, includeAll }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -169,7 +172,7 @@ export default function Home() {
   }
 
   const counts = useMemo(() => {
-    const c = { all: 0, aucun: 0, reseaux: 0, vieux: 0 } as Record<WebPresence | "all", number>;
+    const c = { all: 0, aucun: 0, reseaux: 0, vieux: 0, equipe: 0 } as Record<WebPresence | "all", number>;
     for (const l of result?.leads || []) { c.all++; c[l.presence]++; }
     return c;
   }, [result]);
@@ -177,9 +180,14 @@ export default function Home() {
   const shown = useMemo(() => {
     if (!result) return [];
     return result.leads.filter(
-      (l) => (l.rating || 0) >= minRating && (l.reviews || 0) >= minReviews && (kind === "all" || l.presence === kind)
+      (l) =>
+        (l.rating || 0) >= minRating &&
+        (l.reviews || 0) >= minReviews &&
+        (kind === "all" || l.presence === kind) &&
+        (!wpOnly || l.audit?.cms === "WordPress" || !l.website)
     );
-  }, [result, minRating, minReviews, kind]);
+  }, [result, minRating, minReviews, kind, wpOnly]);
+  const wpCount = useMemo(() => (result?.leads || []).filter((l) => l.audit?.cms === "WordPress").length, [result]);
 
   const updatePipeline = useCallback(
     (id: string, patch: Partial<PipelineEntry> | null) => {
@@ -256,7 +264,7 @@ export default function Home() {
                 {TRADES.map((t) => <option key={t.id} value={t.id}>{t.label.toLowerCase()}</option>)}
               </select>
             </span>
-            <span className="mark">{includeOld ? "sans site, ou avec un site à refaire," : "sans site"}</span>
+            <span className="mark">{includeAll ? "à équiper," : includeOld ? "sans site, ou avec un site à refaire," : "sans site"}</span>
             <span className="fixed">à</span>
             <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="ville" aria-label="Ville ou code postal" size={Math.max(6, city.length)} />
           </form>
@@ -269,6 +277,11 @@ export default function Home() {
               <input type="checkbox" checked={includeOld} onChange={(e) => setIncludeOld(e.target.checked)} />
               <span aria-hidden />
               Analyser les sites existants
+            </label>
+            <label className="switch">
+              <input type="checkbox" checked={includeAll} onChange={(e) => setIncludeAll(e.target.checked)} />
+              <span aria-hidden />
+              Inclure les sites corrects (maintenance, print)
             </label>
             <label className="switch">
               <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} />
@@ -329,7 +342,7 @@ export default function Home() {
               </div>
 
               <div className="segments" role="tablist" aria-label="Type de prospect">
-                {(["all", "aucun", "reseaux", "vieux"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
+                {(["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
                   <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)}>
                     {k === "all" ? "Tous" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
                   </button>
@@ -347,6 +360,13 @@ export default function Home() {
                     {[0, 5, 10, 30, 100].map((v) => <option key={v} value={v}>{v ? `${v}+` : "Tous"}</option>)}
                   </select>
                 </label>
+                {wpCount > 0 && (
+                  <label className="switch small">
+                    <input type="checkbox" checked={wpOnly} onChange={(e) => setWpOnly(e.target.checked)} />
+                    <span aria-hidden />
+                    Sites WordPress seulement ({wpCount})
+                  </label>
+                )}
                 <span style={{ flex: 1 }} />
                 <button className="btn ghost small" onClick={() => addMany(shown.map((l) => l.id))} disabled={!shown.length}>Tout ajouter au pipeline</button>
                 <button className="btn ghost small" onClick={exportScan} disabled={!shown.length}>CSV</button>
@@ -377,7 +397,13 @@ export default function Home() {
                                   <span>{l.address.replace(/, France$/, "")}</span>
                                   {l.rating && <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span>}
                                 </div>
-                                {l.audit && <div className="issues">{l.audit.issues.slice(0, 3).join(" · ")}</div>}
+                                {l.audit && l.audit.issues.length > 0 && <div className="issues">{l.audit.issues.slice(0, 3).join(" · ")}</div>}
+                                <div className="needs-line">
+                                  {l.audit?.cms && <span className={`cms ${l.audit.cms === "WordPress" ? "wp" : ""}`}>{l.audit.cms}</span>}
+                                  {detectNeeds(l).filter((n) => n.priority <= 2).slice(0, 3).map((n) => (
+                                    <span key={n.key} className="need-chip">{n.title.length > 42 ? n.title.slice(0, 40) + "…" : n.title}</span>
+                                  ))}
+                                </div>
                               </div>
                             </button>
                             <div className="side">
@@ -429,7 +455,7 @@ export default function Home() {
         <Board leads={leads} pipeline={pipeline} onOpen={setOpenId} onMove={(id, stage) => updatePipeline(id, { stage })} routeUrl={routeUrl} />
       )}
 
-      {view === "bilan" && <Dashboard leads={leads} pipeline={pipeline} onOpen={setOpenId} />}
+      {view === "bilan" && <Dashboard leads={leads} pipeline={pipeline} prices={profile.prices || {}} onOpen={setOpenId} />}
 
       {view === "reglages" && (
         <main className="settings">
@@ -444,6 +470,25 @@ export default function Home() {
             <label className="field">Prix annoncé (facultatif)<input value={profile.price} placeholder="ex. 890 € puis 39 €/mois" onChange={(e) => setProfile({ ...profile, price: e.target.value })} /></label>
           </div>
           <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
+          <h2 className="set-h">Tes tarifs</h2>
+          <p className="hint" style={{ marginTop: -4 }}>Prix de départ HT. Laisse vide ce que tu fais sur devis : ils servent à chiffrer les propositions.</p>
+          <div className="prices">
+            {SERVICES.map((sv) => (
+              <label key={sv.id} className="price-row">
+                <span>{sv.label}<small>{sv.family}</small></span>
+                <input
+                  type="number" inputMode="numeric" min="0" step="10" placeholder="Sur devis"
+                  value={profile.prices?.[sv.id] ?? ""}
+                  onChange={(e) => {
+                    const prices = { ...(profile.prices || {}) };
+                    if (e.target.value === "") delete prices[sv.id];
+                    else prices[sv.id] = Number(e.target.value);
+                    setProfile({ ...profile, prices });
+                  }}
+                />
+              </label>
+            ))}
+          </div>
           <label className="field">Ce que tu proposes ensuite (abonnement, suivi…)<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
           <h2 className="set-h">Compte</h2>
           {me?.mode === "comptes" && me.user ? (

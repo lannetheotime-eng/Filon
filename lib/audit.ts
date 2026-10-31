@@ -8,6 +8,41 @@ const FREE_BUILDERS = [
   ["sitew.", "SiteW"], ["simplesite", "SimpleSite"], ["1and1-editor", "1&1 Editor"], ["ionos-mywebsite", "IONOS MyWebsite"],
 ] as const;
 
+// Reconnaît le CMS ou l'outil qui a servi à faire le site
+export function detectCms(html: string, url: string, headers?: Headers): { cms?: string; version?: string } {
+  const low = html.toLowerCase();
+  const h = (k: string) => headers?.get(k)?.toLowerCase() || "";
+  const gen = html.match(/<meta[^>]+name=["']generator["'][^>]+content=["']([^"']+)["']/i)?.[1] || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']generator["']/i)?.[1] || "";
+  const wpVer = gen.match(/WordPress\s+([\d.]+)/i)?.[1];
+  if (/wordpress/i.test(gen) || low.includes("/wp-content/") || low.includes("/wp-includes/") || h("link").includes("api.w.org"))
+    return { cms: url.includes("wordpress.com") || low.includes("s0.wp.com") ? "WordPress.com" : "WordPress", version: wpVer };
+  const rules: [boolean, string][] = [
+    [low.includes("static.wixstatic.com") || low.includes("wix.com website builder") || !!h("x-wix-request-id"), "Wix"],
+    [low.includes("cdn.shopify.com") || !!h("x-shopify-stage"), "Shopify"],
+    [low.includes("squarespace") || h("server").includes("squarespace"), "Squarespace"],
+    [low.includes("webflow.com") || /data-wf-(page|site)/.test(low), "Webflow"],
+    [low.includes("jimdo"), "Jimdo"],
+    [low.includes("e-monsite"), "e-monsite"],
+    [low.includes("webnode"), "Webnode"],
+    [/joomla/i.test(gen) || low.includes("/media/jui/") || low.includes("/components/com_"), "Joomla"],
+    [/drupal/i.test(gen) || low.includes("drupal-settings-json") || low.includes("/sites/default/files/"), "Drupal"],
+    [/prestashop/i.test(gen) || low.includes("prestashop"), "PrestaShop"],
+    [low.includes("framerusercontent.com") || /framer/i.test(gen), "Framer"],
+    [low.includes("zyrosite") || low.includes("zyro.com"), "Hostinger"],
+    [low.includes("site123"), "SITE123"],
+    [low.includes("weebly"), "Weebly"],
+    [low.includes("godaddy") && low.includes("website builder"), "GoDaddy"],
+    [low.includes("img1.wsimg.com"), "GoDaddy"],
+    [low.includes("sites.google.com") || url.includes("sites.google.com"), "Google Sites"],
+    [low.includes("duda") && low.includes("dmalbum"), "Duda"],
+    [low.includes("ionos") && low.includes("mywebsite"), "IONOS"],
+  ];
+  const hit = rules.find(([ok]) => ok);
+  if (hit) return { cms: hit[1] };
+  if (gen) return { cms: gen.split(/[\s;]/)[0] };
+  return {};
+}
+
 export async function auditSite(url: string): Promise<SiteAudit> {
   const issues: string[] = [];
   let score = 0;
@@ -74,6 +109,12 @@ export async function auditSite(url: string): Promise<SiteAudit> {
 
   if ((low.match(/<table/g) || []).length >= 5 && !mobile) { issues.push("Mise en page en tableaux (années 2000)"); score += 10; }
 
+  const { cms, version: cmsVersion } = detectCms(html, finalUrl, res.headers);
+  if (cms === "WordPress" && cmsVersion && Number(cmsVersion.split(".")[0]) < 6) {
+    issues.push(`WordPress ${cmsVersion}, une version très ancienne (failles de sécurité)`);
+    score += 20;
+  }
+
   const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
   if (!title) { issues.push("Pas de titre pour Google"); score += 10; }
   if (!/<meta[^>]+name=["']?description/i.test(html)) { issues.push("Pas de description pour Google"); score += 10; }
@@ -84,7 +125,7 @@ export async function auditSite(url: string): Promise<SiteAudit> {
     .match(/mailto:([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i)?.[1]
     ?.toLowerCase();
 
-  return { score: Math.min(100, score), issues, https, mobile, url: finalUrl, email, lastYear: lastYear ?? undefined };
+  return { score: Math.min(100, score), issues, https, mobile, url: finalUrl, email, lastYear: lastYear ?? undefined, cms, cmsVersion };
 }
 
 // Audite plusieurs sites en parallèle, avec une limite de temps globale.

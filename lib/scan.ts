@@ -158,7 +158,7 @@ const FIELDS = [
   "places.id", "places.displayName", "places.formattedAddress", "places.nationalPhoneNumber",
   "places.internationalPhoneNumber", "places.websiteUri", "places.rating", "places.userRatingCount",
   "places.location", "places.googleMapsUri", "places.businessStatus", "places.primaryTypeDisplayName",
-  "places.regularOpeningHours",
+  "places.regularOpeningHours", "places.photos",
   "nextPageToken",
 ].join(",");
 
@@ -188,7 +188,7 @@ async function searchTile(key: string, query: string, tile: Tile, maxPages: numb
   return { places, calls };
 }
 
-export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false): Promise<ScanResult> {
+export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false, includeAll = false): Promise<ScanResult> {
   const trade = getTrade(tradeId);
   if (!trade) throw new Error("Métier inconnu.");
   const key = process.env.GOOGLE_PLACES_API_KEY;
@@ -203,7 +203,7 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
   const [lng, lat] = commune.centre.coordinates;
   const city = { name: commune.nom, dept: commune.codeDepartement, lat, lng };
 
-  if (!key) return demoScan(city, tradeId, includeOld);
+  if (!key) return demoScan(city, tradeId, includeOld || includeAll, includeAll);
 
   const seen = new Map<string, any>();
   let calls = 0;
@@ -238,6 +238,7 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
       category: p.primaryTypeDisplayName?.text,
       hours: p.regularOpeningHours?.weekdayDescriptions,
       openPeriods: toPeriods(p.regularOpeningHours),
+      photoCount: Array.isArray(p.photos) ? p.photos.length : 0,
       score: scoreLead(base),
       foundAt: now,
       ...base,
@@ -250,7 +251,7 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
     if (plng == null || !inCommune(commune, plng, plat)) continue;
     const c = classify(p.websiteUri);
     if (c.presence === "site") {
-      if (includeOld) toAudit.push(p);
+      if (includeOld || includeAll) toAudit.push(p);
       else { withSite++; rivals.push(asRival(p)); }
       continue;
     }
@@ -263,13 +264,26 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
     const audits = await auditMany(toAudit.slice(0, 80).map((p) => p.websiteUri));
     for (const p of toAudit) {
       const a = audits.get(p.websiteUri);
-      if (!a) { withSite++; rivals.push(asRival(p)); continue; }
+      if (!a) {
+        withSite++;
+        rivals.push(asRival(p));
+        if (includeAll) leads.push(make(p, "equipe", { website: p.websiteUri }));
+        continue;
+      }
       audited++;
-      if (a.score >= 30) {
+      if (a.score >= 30 && (includeOld || includeAll)) {
         const lead = make(p, "vieux", { website: p.websiteUri, audit: a });
         lead.score = Math.min(100, Math.round(lead.score * 0.7 + a.score * 0.3));
         leads.push(lead);
-      } else { withSite++; rivals.push(asRival(p)); }
+      } else {
+        withSite++;
+        rivals.push(asRival(p));
+        if (includeAll) {
+          const lead = make(p, "equipe", { website: p.websiteUri, audit: a });
+          lead.score = Math.round(lead.score * 0.8);
+          leads.push(lead);
+        }
+      }
     }
   }
   addContext(leads, rivals, leads.length + withSite, withSite);
@@ -308,7 +322,7 @@ export async function placeDetails(id: string): Promise<Details> {
 }
 
 // ——— Mode démo : données fictives, pour essayer l'outil sans clé API ———
-function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false): ScanResult {
+function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false, includeAll = false): ScanResult {
   const trade = getTrade(tradeId)!;
   const names = ["du Marché", "Saint-Cyprien", "des Carmes", "Martin", "du Capitole", "Lafargue", "de la Gare", "Ferrand", "des Minimes", "Rouzaud", "du Canal", "Bonnet"];
   const streets = ["rue des Lois", "allée Jean Jaurès", "rue de Metz", "place Dupuy", "avenue de Muret", "rue Riquet", "boulevard de Strasbourg", "rue Pargaminières"];
@@ -316,7 +330,7 @@ function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false)
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
   const leads: Lead[] = names.map((n, i) => {
     const r = rnd();
-    const presence: WebPresence = includeOld && i % 4 === 1 ? "vieux" : r > 0.7 ? "reseaux" : "aucun";
+    const presence: WebPresence = includeOld && i % 4 === 1 ? "vieux" : includeAll && i % 4 === 3 ? "equipe" : r > 0.7 ? "reseaux" : "aucun";
     const reviews = Math.round(rnd() * 220);
     const rating = Math.round((3.6 + rnd() * 1.4) * 10) / 10;
     const phone = rnd() > 0.1 ? `05 61 ${String(10 + i * 7).padStart(2, "0")} ${String(Math.round(rnd() * 89) + 10)} ${String(Math.round(rnd() * 89) + 10)}` : undefined;
@@ -332,9 +346,12 @@ function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false)
       lng: city.lng + (rnd() - 0.5) * 0.07,
       mapsUrl: `https://www.google.com/maps/search/${encodeURIComponent(trade.singular + " " + city.name)}`,
       socialUrl: presence === "reseaux" ? "https://www.facebook.com/" : undefined,
-      website: presence === "vieux" ? "http://exemple-demo.fr" : undefined,
+      website: presence === "vieux" || presence === "equipe" ? "http://exemple-demo.fr" : undefined,
+      photoCount: i % 3 === 0 ? 2 : 10,
       audit: presence === "vieux"
-        ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017 }
+        ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017, cms: i % 8 === 1 ? "WordPress" : "Wix", cmsVersion: i % 8 === 1 ? "5.2" : undefined }
+        : presence === "equipe"
+        ? { score: 10, issues: [], https: true, mobile: true, url: "https://exemple-demo.fr", cms: "WordPress", cmsVersion: "6.7" }
         : undefined,
       hours: ["lundi: Fermé", "mardi: 07:00–19:30", "mercredi: 07:00–19:30", "jeudi: 07:00–19:30", "vendredi: 07:00–19:30", "samedi: 07:00–19:30", "dimanche: 07:00–13:00"],
       openPeriods: [2, 3, 4, 5, 6].map((day) => ({ day, open: 420, close: 1170 })).concat([{ day: 0, open: 420, close: 780 }]),
