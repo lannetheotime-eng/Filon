@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { Lead, PipelineEntry, Profile, Stage, Details } from "../lib/types";
+import type { Lead, PipelineEntry, Profile, Stage, Details, Dirigeant } from "../lib/types";
 import { STAGES, PRESENCE_LABEL } from "../lib/types";
 import { getTrade } from "../lib/trades";
-import { visitScript, objections, emails, directMessages, sitePrompt } from "../lib/generators";
+import { visitScript, objections, emails, directMessages } from "../lib/generators";
+import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
 
-type Tab = "approche" | "emails" | "messages" | "site";
+type Tab = "plan" | "visite" | "emails" | "messages";
 
 function Copy({ text, label = "Copier" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -40,9 +41,10 @@ export default function LeadDrawer({
   onClose: () => void;
   onPipeline: (patch: Partial<PipelineEntry> | null) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("approche");
+  const [tab, setTab] = useState<Tab>("plan");
   const [details, setDetails] = useState<Details | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [dirs, setDirs] = useState<Dirigeant[] | null>(null);
+  const [busy, setBusy] = useState<"" | "avis" | "dir">("");
   const [err, setErr] = useState("");
   const trade = getTrade(lead.tradeId)!;
 
@@ -54,11 +56,13 @@ export default function LeadDrawer({
 
   useEffect(() => {
     setDetails(null);
+    setDirs(null);
     setErr("");
+    setTab("plan");
   }, [lead.id]);
 
-  async function loadDetails() {
-    setLoading(true);
+  async function loadReviews() {
+    setBusy("avis");
     setErr("");
     try {
       const r = await fetch(`/api/details?id=${encodeURIComponent(lead.id)}`);
@@ -66,9 +70,24 @@ export default function LeadDrawer({
       if (!r.ok) throw new Error(j.error);
       setDetails(j);
     } catch (e: any) {
-      setErr(e.message || "Impossible de récupérer les détails.");
+      setErr(e.message || "Impossible de récupérer les avis.");
     } finally {
-      setLoading(false);
+      setBusy("");
+    }
+  }
+
+  async function loadDirigeant() {
+    setBusy("dir");
+    setErr("");
+    try {
+      const r = await fetch(`/api/dirigeant?name=${encodeURIComponent(lead.name)}&address=${encodeURIComponent(lead.address)}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      setDirs(j.results || []);
+    } catch (e: any) {
+      setErr(e.message || "Recherche impossible.");
+    } finally {
+      setBusy("");
     }
   }
 
@@ -79,7 +98,8 @@ export default function LeadDrawer({
   const q = encodeURIComponent(`${lead.name} ${lead.city}`);
   const mails = emails(lead, profile);
   const script = visitScript(lead, profile);
-  const prompt = sitePrompt(lead, details);
+  const objs = objections(lead, profile);
+  const plan = approachPlan(lead, profile);
   const to = lead.audit?.email || "";
 
   return (
@@ -99,26 +119,13 @@ export default function LeadDrawer({
             <dd>{lead.rating ? `${String(lead.rating).replace(".", ",")} / 5, ${lead.reviews} avis` : "Pas de note"}</dd>
             <dt>Priorité</dt><dd>{lead.score} / 100</dd>
           </dl>
-
-          {lead.audit && (
-            <div className="audit">
-              <div className="audit-head">
-                <strong>Site actuel à refaire</strong>
-                <span className="audit-score">{lead.audit.score}<small>/100</small></span>
-              </div>
-              <ul>{lead.audit.issues.map((i) => <li key={i}>{i}</li>)}</ul>
-              {lead.website && <a href={lead.website} target="_blank" rel="noreferrer">Voir le site actuel</a>}
-            </div>
-          )}
-
           <div className="actions">
             <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lead.address)}`} target="_blank" rel="noreferrer">Itinéraire</a>
             <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(mails[0].subject)}&body=${encodeURIComponent(mails[0].body)}`}>Écrire un e-mail</a>
             {lead.mapsUrl && <a className="btn ghost small" href={lead.mapsUrl} target="_blank" rel="noreferrer">Fiche Google</a>}
+            {lead.website && <a className="btn ghost small" href={lead.website} target="_blank" rel="noreferrer">Son site</a>}
             {lead.socialUrl && <a className="btn ghost small" href={lead.socialUrl} target="_blank" rel="noreferrer">Sa page</a>}
             <a className="btn ghost small" href={`https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">Instagram</a>
-            <a className="btn ghost small" href={`https://annuaire-entreprises.data.gouv.fr/rechercher?terme=${q}`} target="_blank" rel="noreferrer">Trouver le gérant</a>
-            {lead.phone && <a className="btn ghost small" href={`tel:${(lead.phoneIntl || lead.phone).replace(/\s/g, "")}`}>Appeler</a>}
           </div>
         </header>
 
@@ -161,25 +168,109 @@ export default function LeadDrawer({
 
         <div className="subtabs" role="tablist">
           {([
-            ["approche", "Visite"],
+            ["plan", "Plan d'approche"],
+            ["visite", "Visite"],
             ["emails", "E-mails"],
             ["messages", "Messages"],
-            ["site", "Maquette"],
           ] as [Tab, string][]).map(([id, label]) => (
             <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
-        {tab === "approche" && (
+        {tab === "plan" && (
+          <section className="plan">
+            <div className="verdict">
+              <span className="hint">Canal conseillé</span>
+              <strong>{CHANNEL_LABEL[plan.channel]}</strong>
+              <p>{plan.reasons.join(" ")}</p>
+              <span className="hint">Plan B : {CHANNEL_LABEL[plan.secondary].toLowerCase()}.</span>
+            </div>
+
+            <div className="plan-grid">
+              <div className="when">
+                <h3>Quand</h3>
+                <p className="big">{plan.slot.text}</p>
+                {plan.slot.next && <p>Prochain créneau : <b>{plan.slot.next}</b></p>}
+                <p className="hint">À éviter : {plan.avoid}.{plan.slot.known ? " Créneau croisé avec ses horaires Google." : " Horaires inconnus : vérifie sur sa fiche Google."}</p>
+              </div>
+              <div>
+                <h3>À qui</h3>
+                <p>{plan.ask}</p>
+                {dirs === null ? (
+                  <button className="btn ghost small" onClick={loadDirigeant} disabled={busy === "dir"}>
+                    {busy === "dir" ? "Recherche…" : "Trouver le dirigeant"}
+                  </button>
+                ) : dirs.length ? (
+                  <div className="dirs">
+                    {dirs.slice(0, 2).map((d) => (
+                      <div key={d.siren} className="dir">
+                        <strong>{d.people.length ? d.people.slice(0, 2).map((x) => x.name).join(", ") : d.company}</strong>
+                        <small>
+                          {d.people[0]?.role ? `${d.people[0].role} · ` : ""}{d.company}{d.created ? `, créée en ${d.created.slice(0, 4)}` : ""}
+                        </small>
+                        <small>{d.address}</small>
+                      </div>
+                    ))}
+                    <p className="hint">Registre officiel des entreprises. Vérifie que l'adresse correspond avant d'utiliser le nom.</p>
+                  </div>
+                ) : (
+                  <p className="hint">Aucune correspondance dans le registre. <a href={`https://annuaire-entreprises.data.gouv.fr/rechercher?terme=${q}`} target="_blank" rel="noreferrer">Chercher à la main</a></p>
+                )}
+              </div>
+            </div>
+
+            <h3>L'angle</h3>
+            <p className="angle">{plan.angle}</p>
+
+            <h3>Tes arguments</h3>
+            <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}</ul>
+
+            <h3>Ce que tu proposes</h3>
+            <p>{plan.offer.charAt(0).toUpperCase() + plan.offer.slice(1)}. Ensuite : {profile.offer}.</p>
+            <p className="hint">Ses clients cherchent surtout : {plan.needs.join(", ")}.</p>
+
+            <h3>Ce que disent ses clients</h3>
+            {details?.reviews?.filter((r) => r.text).length ? (
+              <ul className="reviews">
+                {details.reviews!.filter((r) => r.text).slice(0, 3).map((r) => (
+                  <li key={r.author + r.when}>
+                    <p>« {r.text.replace(/\s+/g, " ").trim().slice(0, 240)}{r.text.length > 240 ? "…" : ""} »</p>
+                    <small>{r.author}, {r.rating}/5, {r.when}</small>
+                  </li>
+                ))}
+              </ul>
+            ) : details ? (
+              <p className="hint">Aucun avis rédigé disponible.</p>
+            ) : (
+              <button className="btn ghost small" onClick={loadReviews} disabled={busy === "avis"}>
+                {busy === "avis" ? "Chargement…" : "Voir ses derniers avis à citer"}
+              </button>
+            )}
+            {err && <p className="error">{err}</p>}
+
+            <h3>À préparer</h3>
+            <ul className="checklist">{plan.prep.map((x) => <li key={x}>{x}</li>)}</ul>
+
+            <h3>Objections probables</h3>
+            {objs.filter((o) => plan.likely.includes(o.id)).map((o) => (
+              <details className="obj" key={o.id} open><summary>{o.q}</summary><p>{o.a}</p></details>
+            ))}
+
+            <h3>Cadence</h3>
+            <ol className="cadence">{plan.cadence.map((c) => <li key={c}>{c}</li>)}</ol>
+          </section>
+        )}
+
+        {tab === "visite" && (
           <section>
-            <p className="hint" style={{ marginTop: 0 }}>Pour passer en boutique, de préférence en dehors des heures de rush.</p>
+            <p className="hint" style={{ marginTop: 0 }}>Pour passer en boutique : {plan.slot.text.toLowerCase()}.</p>
             {script.map((s) => (
               <div className="step" key={s.step}><span>{s.step}</span><p>{s.text}</p></div>
             ))}
             <div style={{ marginBottom: 16 }}><Copy text={script.map((s) => `${s.step} : ${s.text}`).join("\n\n")} label="Copier le script" /></div>
-            <h3 className="h3">Réponses aux objections</h3>
-            {objections(lead, profile).map((o) => (
-              <details className="obj" key={o.q}><summary>{o.q}</summary><p>{o.a}</p></details>
+            <h3 className="h3">Toutes les objections</h3>
+            {objs.map((o) => (
+              <details className="obj" key={o.id}><summary>{o.q}</summary><p>{o.a}</p></details>
             ))}
           </section>
         )}
@@ -210,23 +301,6 @@ export default function LeadDrawer({
                 <pre>{m.body}</pre>
               </div>
             ))}
-          </section>
-        )}
-
-        {tab === "site" && (
-          <section>
-            <p style={{ marginTop: 0, color: "var(--ink-2)" }}>
-              Direction propre à cette entreprise, effet « {trade.effect.name} ». Ajoute les horaires et les avis, puis colle le prompt dans Claude.
-            </p>
-            <div className="actions" style={{ marginBottom: 14 }}>
-              <button className="btn small" onClick={loadDetails} disabled={loading || !!details}>
-                {details ? "Horaires et avis ajoutés" : loading ? "Récupération…" : "Ajouter horaires et avis"}
-              </button>
-              <Copy text={prompt} label="Copier le prompt" />
-              <a className="btn ghost small" href="https://claude.ai/new" target="_blank" rel="noreferrer">Ouvrir Claude</a>
-            </div>
-            {err && <p className="error">{err}</p>}
-            <div className="block"><pre>{prompt}</pre></div>
           </section>
         )}
       </aside>

@@ -36,8 +36,28 @@ export type Lead = {
   audit?: SiteAudit;
   category?: string;
   hours?: string[];
+  openPeriods?: OpenPeriod[];
+  context?: LeadContext;
   score: number;
   foundAt: string;
+};
+
+// Plage d'ouverture : jour Google (0 = dimanche … 6 = samedi), minutes depuis minuit
+export type OpenPeriod = { day: number; open: number; close: number };
+
+export type LeadContext = {
+  rival?: { name: string; distance: number; rating?: number; reviews?: number };
+  siteShare?: number; // % des entreprises du même métier analysées qui ont un site correct
+  total?: number; // nombre d'entreprises du métier analysées dans la ville
+};
+
+export type Dirigeant = {
+  company: string;
+  siren: string;
+  address: string;
+  created?: string;
+  people: { name: string; role?: string }[];
+  active: boolean;
 };
 
 export type Stage = "a_contacter" | "contacte" | "a_relancer" | "rdv" | "signe" | "perdu";
@@ -86,6 +106,7 @@ export type Profile = {
   site: string;
   offer: string;
   price: string;
+  portfolio: string;
 };
 
 export const DEFAULT_PROFILE: Profile = {
@@ -96,4 +117,5 @@ export const DEFAULT_PROFILE: Profile = {
   site: "thot-studio.fr",
   offer: "un site vitrine sur mesure, optimisé pour Google en local, avec la maintenance incluse",
   price: "",
+  portfolio: "",
 };

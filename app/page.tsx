@@ -294,7 +294,7 @@ export default function Home() {
               <div className="intro">
                 <div><b>1</b><p>Choisis un métier et une ville.</p></div>
                 <div><b>2</b><p>Filon trouve les entreprises sans site, ou dont le site est dépassé.</p></div>
-                <div><b>3</b><p>Tu les contactes avec un e-mail prêt, ou tu passes les voir avec une maquette.</p></div>
+                <div><b>3</b><p>Pour chacune, un plan d'approche : quel canal, quand, quel angle, quels arguments.</p></div>
               </div>
             </section>
           )}
@@ -319,7 +319,7 @@ export default function Home() {
       {view === "reglages" && (
         <main className="settings">
           <h1>Réglages</h1>
-          <p>Ces infos signent tes e-mails, messages et scripts de visite. Elles restent dans ce navigateur.</p>
+          <p>Ces infos signent tes e-mails, messages et scripts, et nourrissent le plan d'approche. Elles restent dans ce navigateur.</p>
           <div className="row2">
             <label className="field">Prénom<input value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} /></label>
             <label className="field">Studio<input value={profile.studio} onChange={(e) => setProfile({ ...profile, studio: e.target.value })} /></label>
@@ -328,7 +328,8 @@ export default function Home() {
             <label className="field">Site<input value={profile.site} onChange={(e) => setProfile({ ...profile, site: e.target.value })} /></label>
             <label className="field">Prix annoncé (facultatif)<input value={profile.price} placeholder="ex. 890 € puis 39 €/mois" onChange={(e) => setProfile({ ...profile, price: e.target.value })} /></label>
           </div>
-          <label className="field">Ton offre, en une phrase<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
+          <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
+          <label className="field">Ce que tu proposes ensuite (abonnement, suivi…)<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
           <p className="hint">Le pipeline et les entreprises trouvées sont enregistrés dans ce navigateur : exporte-les en CSV pour les garder ailleurs.</p>
           {confirmReset ? (
             <div className="actions">

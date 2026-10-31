@@ -1,5 +1,5 @@
 import "server-only";
-import type { Lead, ScanResult, WebPresence, Details } from "./types";
+import type { Lead, ScanResult, WebPresence, Details, OpenPeriod } from "./types";
 import { getTrade } from "./trades";
 import { auditMany } from "./audit";
 
@@ -93,6 +93,50 @@ export function scoreLead(l: { rating?: number; reviews?: number; phone?: string
   return Math.min(100, activity + rating + phone + gap);
 }
 
+
+// Horaires Google → plages simples par jour (minutes depuis minuit)
+export function toPeriods(roh: any): OpenPeriod[] | undefined {
+  const ps = roh?.periods;
+  if (!Array.isArray(ps) || !ps.length) return undefined;
+  const out: OpenPeriod[] = [];
+  for (const p of ps) {
+    if (!p.open) continue;
+    const open = (p.open.hour || 0) * 60 + (p.open.minute || 0);
+    // Pas de fermeture = ouvert 24 h/24 ; fermeture le lendemain = jusqu'à minuit
+    let close = p.close ? (p.close.hour || 0) * 60 + (p.close.minute || 0) : 24 * 60;
+    if (p.close && p.close.day !== p.open.day) close = 24 * 60;
+    out.push({ day: p.open.day, open, close: close || 24 * 60 });
+  }
+  return out.length ? out : undefined;
+}
+
+// Distance en mètres entre deux points
+function meters(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (bLat - aLat) * toR, dLng = (bLng - aLng) * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * toR) * Math.cos(bLat * toR) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+
+type Rival = { name: string; lat: number; lng: number; rating?: number; reviews?: number };
+
+// Contexte concurrentiel : concurrent le plus proche avec un site correct, part des entreprises équipées
+function addContext(leads: Lead[], rivals: Rival[], total: number, equipped: number) {
+  const siteShare = total ? Math.round((equipped / total) * 100) : undefined;
+  for (const l of leads) {
+    let best: (Rival & { d: number }) | undefined;
+    for (const r of rivals) {
+      const d = meters(l.lat, l.lng, r.lat, r.lng);
+      if (d <= 3000 && (!best || d < best.d)) best = { ...r, d };
+    }
+    l.context = {
+      total,
+      siteShare,
+      rival: best ? { name: best.name, distance: best.d, rating: best.rating, reviews: best.reviews } : undefined,
+    };
+  }
+}
+
 type Tile = { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } };
 
 function tiles(c: Commune, deep: boolean): Tile[] {
@@ -114,6 +158,7 @@ const FIELDS = [
   "places.id", "places.displayName", "places.formattedAddress", "places.nationalPhoneNumber",
   "places.internationalPhoneNumber", "places.websiteUri", "places.rating", "places.userRatingCount",
   "places.location", "places.googleMapsUri", "places.businessStatus", "places.primaryTypeDisplayName",
+  "places.regularOpeningHours",
   "nextPageToken",
 ].join(",");
 
@@ -175,6 +220,8 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
   let withSite = 0;
   const leads: Lead[] = [];
   const toAudit: any[] = [];
+  const rivals: Rival[] = [];
+  const asRival = (p: any): Rival => ({ name: p.displayName?.text || "", lat: p.location.latitude, lng: p.location.longitude, rating: p.rating, reviews: p.userRatingCount });
   const now = new Date().toISOString();
   const make = (p: any, presence: WebPresence, extra: Partial<Lead> = {}): Lead => {
     const base = { phone: p.nationalPhoneNumber, rating: p.rating, reviews: p.userRatingCount, presence };
@@ -189,6 +236,8 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
       lng: p.location.longitude,
       mapsUrl: p.googleMapsUri,
       category: p.primaryTypeDisplayName?.text,
+      hours: p.regularOpeningHours?.weekdayDescriptions,
+      openPeriods: toPeriods(p.regularOpeningHours),
       score: scoreLead(base),
       foundAt: now,
       ...base,
@@ -202,7 +251,7 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
     const c = classify(p.websiteUri);
     if (c.presence === "site") {
       if (includeOld) toAudit.push(p);
-      else withSite++;
+      else { withSite++; rivals.push(asRival(p)); }
       continue;
     }
     leads.push(make(p, c.presence as WebPresence, { socialUrl: c.social }));
@@ -214,20 +263,21 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
     const audits = await auditMany(toAudit.slice(0, 80).map((p) => p.websiteUri));
     for (const p of toAudit) {
       const a = audits.get(p.websiteUri);
-      if (!a) { withSite++; continue; }
+      if (!a) { withSite++; rivals.push(asRival(p)); continue; }
       audited++;
       if (a.score >= 30) {
         const lead = make(p, "vieux", { website: p.websiteUri, audit: a });
         lead.score = Math.min(100, Math.round(lead.score * 0.7 + a.score * 0.3));
         leads.push(lead);
-      } else withSite++;
+      } else { withSite++; rivals.push(asRival(p)); }
     }
   }
+  addContext(leads, rivals, leads.length + withSite, withSite);
   leads.sort((a, b) => b.score - a.score);
   return { city, tradeId, leads, scanned: leads.length + withSite, withSite, audited, calls, demo: false };
 }
 
-// Détails à la demande (horaires, avis) pour nourrir le prompt du site.
+// Détails à la demande : avis clients à citer pendant l'approche.
 export async function placeDetails(id: string): Promise<Details> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key || id.startsWith("demo-")) {
@@ -286,11 +336,21 @@ function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false)
       audit: presence === "vieux"
         ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017 }
         : undefined,
+      hours: ["lundi: Fermé", "mardi: 07:00–19:30", "mercredi: 07:00–19:30", "jeudi: 07:00–19:30", "vendredi: 07:00–19:30", "samedi: 07:00–19:30", "dimanche: 07:00–13:00"],
+      openPeriods: [2, 3, 4, 5, 6].map((day) => ({ day, open: 420, close: 1170 })).concat([{ day: 0, open: 420, close: 780 }]),
       score: scoreLead(base),
       foundAt: new Date().toISOString(),
       ...base,
     };
   });
+  const rivals: Rival[] = [0, 1, 2].map((k) => ({
+    name: `${trade.singular.charAt(0).toUpperCase() + trade.singular.slice(1)} concurrente ${k + 1} (démo)`,
+    lat: city.lat + (rnd() - 0.5) * 0.04,
+    lng: city.lng + (rnd() - 0.5) * 0.05,
+    rating: 4.4,
+    reviews: 180,
+  }));
+  addContext(leads, rivals, leads.length + 9, 9);
   leads.sort((a, b) => b.score - a.score);
   return { city, tradeId, leads, scanned: leads.length + 9, withSite: 9, audited: includeOld ? 12 : 0, calls: 0, demo: true };
 }
