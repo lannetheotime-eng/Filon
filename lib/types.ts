@@ -43,6 +43,9 @@ export type Lead = {
   openPeriods?: OpenPeriod[];
   photoCount?: number; // photos sur la fiche Google (10 maximum renvoyées)
   context?: LeadContext;
+  created?: string; // date de création (registre officiel des entreprises)
+  legalName?: string; // nom officiel trouvé dans le registre, pour vérifier la correspondance
+  registry?: "ok" | "none"; // recherche dans le registre faite
   score: number;
   foundAt: string;
 };

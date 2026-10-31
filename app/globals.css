@@ -519,3 +519,7 @@ table.mini td + td, table.mini th + th { text-align: right; font-family: var(--d
 .roi-in input { width: 110px; border: 1px solid var(--line); background: var(--paper); border-radius: var(--radius-s); padding: 6px 8px; font-family: var(--data); text-align: right; }
 .roi-out { background: var(--mark-soft); border-radius: var(--radius-s); padding: 10px 12px; font-weight: 600; }
 .refs { margin: 8px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.cms.none { background: var(--mark-soft); border-color: transparent; color: var(--mark-ink); }
+.cms.other { background: color-mix(in srgb, var(--alert) 12%, transparent); border-color: transparent; color: var(--alert); }
+.cms.unknown { background: var(--paper); color: var(--ink-3); }
+.since { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--paper); color: var(--ink-2); border: 1px solid var(--line); }

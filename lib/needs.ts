@@ -189,8 +189,9 @@ export function detectNeeds(l: Lead, opts: { now?: Date; created?: string } = {}
     add({ key: "qr-avis", service: "qr-avis", title: "Présentoir QR « Laissez un avis »", why: `Très bonne note (${String(l.rating).replace(".", ",")}) mais seulement ${l.reviews || 0} avis : un QR code au comptoir en fait gagner vite.`, priority: 2 });
 
   // Entreprise récente
-  if (opts.created) {
-    const age = (now.getTime() - new Date(opts.created).getTime()) / (365 * 864e5);
+  const created = opts.created || l.created;
+  if (created) {
+    const age = (now.getTime() - new Date(created).getTime()) / (365 * 864e5);
     if (age < 2) add({ key: "lancement", service: "lancement", title: "Pack lancement", why: `Entreprise créée il y a ${age < 1 ? "moins d'un an" : "moins de deux ans"} : logo, cartes et flyer d'ouverture sont souvent encore à faire proprement.`, priority: 1 });
   }
 

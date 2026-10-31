@@ -381,6 +381,9 @@ function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false,
       socialUrl: presence === "reseaux" ? "https://www.facebook.com/" : undefined,
       website: presence === "vieux" || presence === "equipe" ? "http://exemple-demo.fr" : undefined,
       photoCount: i % 3 === 0 ? 2 : 10,
+      created: `${[1998, 2009, 2016, 2025, 2012, 2020][i % 6]}-0${(i % 9) + 1}-15`,
+      legalName: `${label.toUpperCase()} ${n.toUpperCase()} (démo)`,
+      registry: "ok",
       audit: presence === "vieux"
         ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017, cms: i % 8 === 1 ? "WordPress" : "Wix", cmsVersion: i % 8 === 1 ? "5.2" : undefined }
         : presence === "equipe"

@@ -8,6 +8,7 @@ import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
 import { encodeReport } from "../lib/report";
 import { detectNeeds, proposal } from "../lib/needs";
 import { liveProof, roi, closingLine, ticketQuestion, lines } from "../lib/pitch";
+import { siteStatus, activity } from "../lib/site";
 
 type Tab = "plan" | "besoins" | "visite" | "emails" | "messages";
 
@@ -66,6 +67,9 @@ export default function LeadDrawer({
     setDirs(null);
     setErr("");
     setTab("plan");
+    // Fiche ouverte sans date de création : on interroge le registre (gratuit)
+    if (!lead.created && lead.registry !== "none" && !lead.id.startsWith("demo-")) loadDirigeant();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
   async function loadReviews() {
@@ -113,7 +117,7 @@ export default function LeadDrawer({
   const mails = emails(lead, profile, reportUrl);
   const script = visitScript(lead, profile);
   const objs = objections(lead, profile);
-  const created = dirs?.[0]?.created;
+  const created = lead.created || dirs?.[0]?.created;
   const plan = approachPlan(lead, profile, created);
   const needs = detectNeeds(lead, { created });
   const chosen = entry?.needs ?? needs.filter((n) => n.priority === 1).map((n) => n.key);
@@ -149,7 +153,15 @@ export default function LeadDrawer({
             {to && (<><dt>E-mail</dt><dd>{to}</dd></>)}
             <dt>Google</dt>
             <dd>{lead.rating ? `${String(lead.rating).replace(".", ",")} / 5, ${lead.reviews} avis` : "Pas de note"}</dd>
-            {lead.audit?.cms && (<><dt>Site fait avec</dt><dd><span className={`cms ${lead.audit.cms === "WordPress" ? "wp" : ""}`}>{lead.audit.cms}{lead.audit.cmsVersion ? ` ${lead.audit.cmsVersion}` : ""}</span>{lead.audit.cms === "WordPress" ? " : tu peux intervenir dessus" : " : pas WordPress"}</dd></>)}
+            {(() => {
+              const st = siteStatus(lead);
+              return (<><dt>Site web</dt><dd><span className={`cms ${st.kind === "wp" ? "wp" : ""}`}>{st.label}</span> <span className="hint">{st.detail}</span></dd></>);
+            })()}
+            {(() => {
+              const act = activity(lead.created || dirs?.[0]?.created);
+              const legal = lead.legalName || dirs?.[0]?.company;
+              return (<><dt>En activité</dt><dd>{act ? act.label : lead.registry === "none" || (dirs !== null && !dirs.length) ? "Introuvable dans le registre" : lead.id.startsWith("demo-") ? "Non disponible en démo" : "Recherche…"}{act && legal && <span className="hint"> · {legal}</span>}</dd></>);
+            })()}
             <dt>Priorité</dt><dd>{lead.score} / 100</dd>
           </dl>
           <div className="actions">

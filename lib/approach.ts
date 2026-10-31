@@ -1,6 +1,7 @@
 import type { Lead, Profile, OpenPeriod } from "./types";
 import { getTrade } from "./trades";
 import { detectNeeds } from "./needs";
+import { activity } from "./site";
 
 export type Channel = "visite" | "email" | "message";
 
@@ -254,6 +255,15 @@ export function approachPlan(l: Lead, p: Profile, created?: string) {
     );
   if (l.context?.siteShare != null && (l.context.total || 0) >= 5)
     facts.push(`${l.context.siteShare} % des ${t.label.toLowerCase()} analysées à ${l.city} ont un site correct.`);
+  const act = activity(created || l.created);
+  if (act)
+    facts.push(
+      act.years >= 15
+        ? `En activité depuis ${act.since} (${act.years} ans) : une adresse installée, qui mérite une image à sa hauteur.`
+        : act.years < 2
+        ? `Créée en ${act.since} : tout est encore à construire, c'est le bon moment pour une image solide.`
+        : `En activité depuis ${act.since} (${act.years} ans).`
+    );
   if (cms)
     facts.push(
       `Son site est fait avec ${cms}${l.audit?.cmsVersion ? ` ${l.audit.cmsVersion}` : ""}${cms === "WordPress" ? " : tu peux intervenir dessus directement." : " : pas WordPress, il faudra repartir de zéro."}`

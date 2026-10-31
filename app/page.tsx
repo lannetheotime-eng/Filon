@@ -7,6 +7,7 @@ import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
 import { mergeData, toSync, type SyncData } from "../lib/sync";
 import { detectNeeds, SERVICES } from "../lib/needs";
+import { siteStatus, activity } from "../lib/site";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
@@ -162,6 +163,35 @@ export default function Home() {
     return !live || me?.mode === "comptes" || usedToday + n <= cap;
   }
 
+  // Date de création et nom officiel : registre des entreprises (gratuit, sans requête Google)
+  const [regProgress, setRegProgress] = useState<{ done: number; total: number } | null>(null);
+  async function enrichRegistry(list: Lead[]) {
+    const todo = list.filter((l) => !l.registry && !l.id.startsWith("demo-")).slice(0, 80);
+    if (!todo.length) return;
+    let done = 0;
+    setRegProgress({ done, total: todo.length });
+    const apply = (id: string, patch: Partial<Lead>) => {
+      setLeads((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+      setResult((r) => (r ? { ...r, leads: r.leads.map((x) => (x.id === id ? { ...x, ...patch } : x)) } : r));
+    };
+    const worker = async () => {
+      while (todo.length) {
+        const l = todo.shift()!;
+        try {
+          const r = await fetch(`/api/dirigeant?name=${encodeURIComponent(l.name)}&address=${encodeURIComponent(l.address)}`);
+          const j = await r.json();
+          const best = r.ok ? j.results?.[0] : null;
+          apply(l.id, best ? { created: best.created, legalName: best.company, registry: "ok" } : { registry: "none" });
+        } catch {}
+        done++;
+        setRegProgress({ done, total: done + todo.length });
+        await new Promise((res) => setTimeout(res, 350)); // le registre accepte environ 7 requêtes par seconde
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    setRegProgress(null);
+  }
+
   async function runScan(c = city, t = tradeId) {
     if (!canSpend(scanCost)) {
       setError(`Ce scan peut coûter jusqu'à ${scanCost} requêtes et il t'en reste ${Math.max(0, cap - usedToday)} aujourd'hui sur ton plafond de ${cap}. ${deep ? "Désactive le scan complet ou " : ""}Reviens demain pour rester dans le gratuit.`);
@@ -180,6 +210,7 @@ export default function Home() {
       if (!r.ok) throw new Error(j.error);
       if (j.usage) setMe((m) => (m ? { ...m, usage: j.usage } : m));
       if (!j.demo && j.calls) spend(j.calls);
+      enrichRegistry(j.leads as Lead[]);
       setResult(j);
       setKind("all");
       setLeads((prev) => {
@@ -387,6 +418,7 @@ export default function Home() {
                 <div>
                   <p className="big">prospects pour {trade.label.toLowerCase()} à {result.city.name}</p>
                   {result.city.zone && <p className="hint">Zone : {result.city.zone}</p>}
+                  {regProgress && <p className="hint">Recherche des dates de création dans le registre : {regProgress.done} / {regProgress.total}</p>}
                   <p>
                     {result.scanned} fiches Google analysées{result.audited ? `, dont ${result.audited} sites passés au crible` : ""}.
                     {result.withSite > 0 && ` ${result.withSite} ont un site correct et sont écartées.`}
@@ -453,7 +485,8 @@ export default function Home() {
                                 </div>
                                 {l.audit && l.audit.issues.length > 0 && <div className="issues">{l.audit.issues.slice(0, 3).join(" · ")}</div>}
                                 <div className="needs-line">
-                                  {l.audit?.cms && <span className={`cms ${l.audit.cms === "WordPress" ? "wp" : ""}`}>{l.audit.cms}</span>}
+                                  {(() => { const st = siteStatus(l); return <span className={`cms ${st.kind}`}>{st.label}</span>; })()}
+                                  {activity(l.created) && <span className="since">{activity(l.created)!.label}</span>}
                                   {detectNeeds(l).filter((n) => n.priority <= 2).slice(0, 3).map((n) => (
                                     <span key={n.key} className="need-chip">{n.title.length > 42 ? n.title.slice(0, 40) + "…" : n.title}</span>
                                   ))}
