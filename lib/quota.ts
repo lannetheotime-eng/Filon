@@ -34,6 +34,7 @@ export async function usage(s: Session | null): Promise<Usage> {
 
 // Vérifie avant une opération qui coûtera jusqu'à `need` requêtes Google
 export async function assertBudget(s: Session | null, need: number) {
+  if (!hasKV()) return; // sans base, pas de compteur fiable : le plafond se règle dans Google Cloud
   const u = await usage(s);
   if (u.today + need > u.dailyLimit)
     throw new Error(`Plafond du jour atteint (${u.dailyLimit} requêtes Google). Réessaie demain, ou relève DAILY_CALLS dans Vercel.`);

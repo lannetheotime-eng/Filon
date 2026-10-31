@@ -48,6 +48,8 @@ export default function Home() {
   const [includeOld, setIncludeOld] = usePersistent("filon.old", true);
   const [includeAll, setIncludeAll] = usePersistent("filon.all", false);
   const [wpOnly, setWpOnly] = useState(false);
+  // Mode simple (sans base) : compteur de requêtes tenu par ce navigateur, par mois
+  const [localUsage, setLocalUsage] = usePersistent<{ month: string; calls: number; day: string; today: number }>("filon.usage", { month: "", calls: 0, day: "", today: 0 });
   const [recent, setRecent] = usePersistent<Recent[]>("filon.recent", []);
   const [result, setResult] = usePersistent<ScanResult | null>("filon.last", null);
   const [leads, setLeads] = usePersistent<Record<string, Lead>>("filon.leads", {});
@@ -156,6 +158,15 @@ export default function Home() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       if (j.usage) setMe((m) => (m ? { ...m, usage: j.usage } : m));
+      if (!j.demo && j.calls) {
+        const month = new Date().toISOString().slice(0, 7), day = new Date().toISOString().slice(0, 10);
+        setLocalUsage((u) => ({
+          month,
+          day,
+          calls: (u.month === month ? u.calls : 0) + j.calls,
+          today: (u.day === day ? u.today : 0) + j.calls,
+        }));
+      }
       setResult(j);
       setKind("all");
       setLeads((prev) => {
@@ -290,7 +301,16 @@ export default function Home() {
             </label>
             {error && <span className="error">{error}</span>}
           </div>
-          {me?.usage && me.google && (
+          {me?.google && me.mode === "simple" && (
+            <p className="usage">
+              {(() => {
+                const m = localUsage.month === new Date().toISOString().slice(0, 7) ? localUsage.calls : 0;
+                const t = localUsage.day === new Date().toISOString().slice(0, 10) ? localUsage.today : 0;
+                return `${m} requête${m > 1 ? "s" : ""} Google ce mois-ci depuis cet appareil, dont ${t} aujourd'hui. Scan rapide : 1 à 3, scan complet : jusqu'à 27.`;
+              })()}
+            </p>
+          )}
+          {me?.usage && me.google && me.mode === "comptes" && (
             <p className="usage">
               {me.usage.limit != null
                 ? `${me.usage.used} / ${me.usage.limit} requêtes Google ce mois-ci`
