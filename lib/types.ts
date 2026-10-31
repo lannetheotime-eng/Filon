@@ -85,10 +85,11 @@ export type PipelineEntry = {
   contactedAt?: string;
   channel?: "email" | "visite" | "message" | "appel";
   needs?: string[]; // besoins retenus pour la proposition
+  log?: { at: string; text: string }[]; // historique des actions
 };
 
 export type ScanResult = {
-  city: { name: string; dept: string; lat: number; lng: number };
+  city: { name: string; dept: string; lat: number; lng: number; zone?: string };
   tradeId: string;
   leads: Lead[];
   scanned: number; // fiches analysées
@@ -114,6 +115,7 @@ export type Profile = {
   price: string;
   portfolio: string;
   prices?: Record<string, number>; // tarifs par prestation
+  dailyCap?: number; // plafond de requêtes Google par jour (30 = reste dans le gratuit)
 };
 
 export const DEFAULT_PROFILE: Profile = {

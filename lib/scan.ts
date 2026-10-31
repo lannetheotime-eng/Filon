@@ -41,6 +41,34 @@ export async function geocodeCity(q: string): Promise<Commune> {
   return list[0];
 }
 
+// Zone circulaire autour d'une adresse (Base Adresse Nationale, gratuite et sans clé)
+export async function geocodeAround(address: string, city: string, radius: number): Promise<Commune & { label: string }> {
+  const q = `${address} ${city}`.trim();
+  let res: Response;
+  try {
+    res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=1`, { cache: "no-store" });
+  } catch {
+    throw new Error("Impossible de joindre la Base Adresse Nationale. Réessaie dans un instant.");
+  }
+  if (!res.ok) throw new Error("La Base Adresse Nationale ne répond pas.");
+  const f = (await res.json()).features?.[0];
+  if (!f) throw new Error(`Adresse introuvable : « ${address} ». Essaie une rue, une place ou un nom de quartier.`);
+  const [lng, lat] = f.geometry.coordinates as [number, number];
+  const r = Math.max(200, Math.min(5000, radius));
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= 36; i++) {
+    const a = (i / 36) * 2 * Math.PI;
+    ring.push([lng + (r / (111320 * Math.cos((lat * Math.PI) / 180))) * Math.cos(a), lat + (r / 110540) * Math.sin(a)]);
+  }
+  return {
+    nom: f.properties.city || city,
+    codeDepartement: String(f.properties.context || "").split(",")[0].trim(),
+    centre: { coordinates: [lng, lat] },
+    contour: { type: "Polygon", coordinates: [ring] },
+    label: f.properties.label,
+  };
+}
+
 function rings(contour: Commune["contour"]): [number, number][][] {
   if (!contour) return [];
   if (contour.type === "Polygon") return [contour.coordinates[0]];
@@ -188,26 +216,31 @@ async function searchTile(key: string, query: string, tile: Tile, maxPages: numb
   return { places, calls };
 }
 
-export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false, includeAll = false): Promise<ScanResult> {
+export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false, includeAll = false, around?: { address: string; radius: number }): Promise<ScanResult> {
   const trade = getTrade(tradeId);
   if (!trade) throw new Error("Métier inconnu.");
   const key = process.env.GOOGLE_PLACES_API_KEY;
   let commune: Commune;
+  let zone: string | undefined;
   try {
-    commune = await geocodeCity(cityQuery);
+    if (around?.address) {
+      const g = await geocodeAround(around.address, cityQuery, around.radius);
+      commune = g;
+      zone = `${around.radius >= 1000 ? `${around.radius / 1000} km` : `${around.radius} m`} autour de ${g.label}`;
+    } else commune = await geocodeCity(cityQuery);
   } catch (e) {
     if (key) throw e;
     // Mode démo hors ligne : position par défaut (Toulouse)
     commune = { nom: cityQuery.trim(), codeDepartement: "31", centre: { coordinates: [1.444, 43.6045] } };
   }
   const [lng, lat] = commune.centre.coordinates;
-  const city = { name: commune.nom, dept: commune.codeDepartement, lat, lng };
+  const city = { name: commune.nom, dept: commune.codeDepartement, lat, lng, zone };
 
   if (!key) return demoScan(city, tradeId, includeOld || includeAll, includeAll);
 
   const seen = new Map<string, any>();
   let calls = 0;
-  const ts = tiles(commune, deep);
+  const ts = tiles(commune, deep && !zone);
   // Requêtes par lots de 4 pour rester raisonnable
   for (let i = 0; i < ts.length; i += 4) {
     const batch = await Promise.all(ts.slice(i, i + 4).map((t) => searchTile(key, `${trade.query} ${commune.nom}`, t, 3)));

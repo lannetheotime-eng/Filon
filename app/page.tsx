@@ -3,18 +3,19 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from "react"
 import dynamic from "next/dynamic";
 import { TRADES, getTrade } from "../lib/trades";
 import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } from "../lib/types";
-import { DEFAULT_PROFILE, PRESENCE_LABEL } from "../lib/types";
+import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
 import { mergeData, toSync, type SyncData } from "../lib/sync";
 import { detectNeeds, SERVICES } from "../lib/needs";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
-import { IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
+import Today from "../components/Today";
+import { IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
 
 const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loading: () => <div className="map" /> });
 
-type View = "scan" | "pipeline" | "bilan" | "reglages";
+type View = "scan" | "today" | "pipeline" | "bilan" | "reglages";
 type Recent = { city: string; tradeId: string; at: string };
 type Usage = { used: number; limit: number | null; today: number; dailyLimit: number };
 type Me = { mode: "simple" | "comptes"; user: { email: string; role: "admin" | "user" } | null; usage: Usage | null; google: boolean };
@@ -48,6 +49,8 @@ export default function Home() {
   const [includeOld, setIncludeOld] = usePersistent("filon.old", true);
   const [includeAll, setIncludeAll] = usePersistent("filon.all", false);
   const [wpOnly, setWpOnly] = useState(false);
+  const [around, setAround] = useState("");
+  const [radius, setRadius] = usePersistent("filon.radius", 1000);
   // Mode simple (sans base) : compteur de requêtes tenu par ce navigateur, par mois
   const [localUsage, setLocalUsage] = usePersistent<{ month: string; calls: number; day: string; today: number }>("filon.usage", { month: "", calls: 0, day: "", today: 0 });
   const [recent, setRecent] = usePersistent<Recent[]>("filon.recent", []);
@@ -145,7 +148,25 @@ export default function Home() {
     }
   }
 
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const usedToday = localUsage.day === todayKey ? localUsage.today : 0;
+  const cap = profile.dailyCap ?? 30;
+  const scanCost = deep && !around.trim() ? 27 : 3;
+  const live = !!me?.google;
+
+  function spend(n: number) {
+    const month = new Date().toISOString().slice(0, 7), day = new Date().toISOString().slice(0, 10);
+    setLocalUsage((u) => ({ month, day, calls: (u.month === month ? u.calls : 0) + n, today: (u.day === day ? u.today : 0) + n }));
+  }
+  function canSpend(n: number) {
+    return !live || me?.mode === "comptes" || usedToday + n <= cap;
+  }
+
   async function runScan(c = city, t = tradeId) {
+    if (!canSpend(scanCost)) {
+      setError(`Ce scan peut coûter jusqu'à ${scanCost} requêtes et il t'en reste ${Math.max(0, cap - usedToday)} aujourd'hui sur ton plafond de ${cap}. ${deep ? "Désactive le scan complet ou " : ""}Reviens demain pour rester dans le gratuit.`);
+      return;
+    }
     setLoading(true);
     setError("");
     setSelected([]);
@@ -153,20 +174,12 @@ export default function Home() {
       const r = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld, includeAll }),
+        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld, includeAll, around: around.trim() || undefined, radius }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       if (j.usage) setMe((m) => (m ? { ...m, usage: j.usage } : m));
-      if (!j.demo && j.calls) {
-        const month = new Date().toISOString().slice(0, 7), day = new Date().toISOString().slice(0, 10);
-        setLocalUsage((u) => ({
-          month,
-          day,
-          calls: (u.month === month ? u.calls : 0) + j.calls,
-          today: (u.day === day ? u.today : 0) + j.calls,
-        }));
-      }
+      if (!j.demo && j.calls) spend(j.calls);
       setResult(j);
       setKind("all");
       setLeads((prev) => {
@@ -205,7 +218,16 @@ export default function Home() {
       setPipeline((prev) => {
         const next = { ...prev };
         if (patch === null) delete next[id];
-        else next[id] = { ...({ stage: "a_contacter", notes: "" } as PipelineEntry), ...prev[id], ...patch, updatedAt: new Date().toISOString() };
+        else {
+          const before = prev[id];
+          const log = [...(before?.log || [])];
+          const at = new Date().toISOString();
+          if (!before) log.push({ at, text: "Ajoutée au pipeline" });
+          if (patch.channel && patch.contactedAt) log.push({ at, text: `Contactée par ${{ visite: "visite", email: "e-mail", message: "message", appel: "téléphone" }[patch.channel]}` });
+          else if (patch.stage && before && patch.stage !== before.stage) log.push({ at, text: `Étape : ${STAGES.find((x) => x.id === patch.stage)?.label}` });
+          if (patch.amount && patch.amount !== before?.amount) log.push({ at, text: `Montant : ${patch.amount.toLocaleString("fr-FR")} €` });
+          next[id] = { ...({ stage: "a_contacter", notes: "" } as PipelineEntry), ...before, ...patch, log: log.slice(-40), updatedAt: at };
+        }
         return next;
       });
     },
@@ -240,6 +262,7 @@ export default function Home() {
 
   const NAV: [View, string, () => React.ReactElement][] = [
     ["scan", "Scanner", IconScan],
+    ["today", "Aujourd'hui", IconToday],
     ["pipeline", "Pipeline", IconBoard],
     ["bilan", "Bilan", IconStats],
     ["reglages", "Réglages", IconSettings],
@@ -282,7 +305,7 @@ export default function Home() {
 
           <div className="run">
             <button className="btn big" onClick={() => runScan()} disabled={loading || !city.trim()}>
-              {loading ? (includeOld ? "Scan et analyse des sites…" : "Scan en cours…") : "Scanner la ville"}
+              {loading ? (includeOld ? "Scan et analyse des sites…" : "Scan en cours…") : around.trim() ? "Scanner le quartier" : "Scanner la ville"}
             </button>
             <label className="switch">
               <input type="checkbox" checked={includeOld} onChange={(e) => setIncludeOld(e.target.checked)} />
@@ -300,6 +323,16 @@ export default function Home() {
               Scan complet de la ville
             </label>
             {error && <span className="error">{error}</span>}
+          </div>
+          <div className="around">
+            <label className="around-field">
+              <span>Autour de</span>
+              <input value={around} onChange={(e) => setAround(e.target.value)} placeholder="une adresse, une place, un quartier (facultatif)" aria-label="Scanner autour d'une adresse" />
+            </label>
+            <select value={radius} onChange={(e) => setRadius(+e.target.value)} aria-label="Rayon" disabled={!around.trim()}>
+              {[500, 1000, 2000, 5000].map((r) => <option key={r} value={r}>{r >= 1000 ? `${r / 1000} km` : `${r} m`}</option>)}
+            </select>
+            {live && <span className="cost">Coût : jusqu'à {scanCost} requêtes · {me?.mode === "comptes" ? "" : `il t'en reste ${Math.max(0, cap - usedToday)} aujourd'hui`}</span>}
           </div>
           {me?.google && me.mode === "simple" && (
             <p className="usage">
@@ -353,6 +386,7 @@ export default function Home() {
                 <span className="n">{result.leads.length}</span>
                 <div>
                   <p className="big">prospects pour {trade.label.toLowerCase()} à {result.city.name}</p>
+                  {result.city.zone && <p className="hint">Zone : {result.city.zone}</p>}
                   <p>
                     {result.scanned} fiches Google analysées{result.audited ? `, dont ${result.audited} sites passés au crible` : ""}.
                     {result.withSite > 0 && ` ${result.withSite} ont un site correct et sont écartées.`}
@@ -471,6 +505,8 @@ export default function Home() {
         </main>
       )}
 
+      {view === "today" && <Today leads={leads} pipeline={pipeline} profile={profile} onOpen={setOpenId} routeUrl={routeUrl} />}
+
       {view === "pipeline" && (
         <Board leads={leads} pipeline={pipeline} onOpen={setOpenId} onMove={(id, stage) => updatePipeline(id, { stage })} routeUrl={routeUrl} />
       )}
@@ -490,6 +526,15 @@ export default function Home() {
             <label className="field">Prix annoncé (facultatif)<input value={profile.price} placeholder="ex. 890 € puis 39 €/mois" onChange={(e) => setProfile({ ...profile, price: e.target.value })} /></label>
           </div>
           <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
+          <h2 className="set-h">Rester dans le gratuit</h2>
+          <div className="set-block">
+            <label className="price-row" style={{ borderBottom: 0 }}>
+              <span>Plafond de requêtes Google par jour<small>30 par jour = 930 par mois au plus, sous les 1 000 gratuites</small></span>
+              <input type="number" min="1" step="1" value={cap} onChange={(e) => setProfile({ ...profile, dailyCap: Math.max(1, Number(e.target.value) || 30) })} />
+            </label>
+            <p className="hint">Filon refuse un scan qui ferait dépasser ce plafond. Garde le même chiffre dans les quotas de Google Cloud.</p>
+          </div>
+
           <h2 className="set-h">Tes tarifs</h2>
           <p className="hint" style={{ marginTop: -4 }}>Prix de départ HT. Laisse vide ce que tu fais sur devis : ils servent à chiffrer les propositions.</p>
           <div className="prices">
@@ -574,6 +619,8 @@ export default function Home() {
           entry={pipeline[openLead.id]}
           onClose={() => setOpenId(null)}
           onPipeline={(patch) => updatePipeline(openLead.id, patch)}
+          canSpend={canSpend}
+          onSpend={spend}
         />
       )}
     </>

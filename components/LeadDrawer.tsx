@@ -36,12 +36,16 @@ export default function LeadDrawer({
   entry,
   onClose,
   onPipeline,
+  canSpend = () => true,
+  onSpend = () => {},
 }: {
   lead: Lead;
   profile: Profile;
   entry?: PipelineEntry;
   onClose: () => void;
   onPipeline: (patch: Partial<PipelineEntry> | null) => void;
+  canSpend?: (n: number) => boolean;
+  onSpend?: (n: number) => void;
 }) {
   const [tab, setTab] = useState<Tab>("plan");
   const [details, setDetails] = useState<Details | null>(null);
@@ -64,6 +68,10 @@ export default function LeadDrawer({
   }, [lead.id]);
 
   async function loadReviews() {
+    if (!lead.id.startsWith("demo-") && !canSpend(1)) {
+      setErr("Plafond de requêtes du jour atteint : reviens demain pour rester dans le gratuit.");
+      return;
+    }
     setBusy("avis");
     setErr("");
     try {
@@ -71,6 +79,7 @@ export default function LeadDrawer({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setDetails(j);
+      if (!lead.id.startsWith("demo-")) onSpend(1);
     } catch (e: any) {
       setErr(e.message || "Impossible de récupérer les avis.");
     } finally {
@@ -189,6 +198,18 @@ export default function LeadDrawer({
               onChange={(e) => onPipeline({ notes: e.target.value })}
             />
           </label>
+          {entry?.log?.length ? (
+            <details className="history">
+              <summary>Historique ({entry.log.length})</summary>
+              <ol>
+                {[...entry.log].reverse().map((h, i) => (
+                  <li key={h.at + i}>
+                    <time>{new Date(h.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</time> {h.text}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          ) : null}
         </section>
 
         <div className="subtabs" role="tablist">

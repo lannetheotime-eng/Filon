@@ -197,6 +197,9 @@ export function bestSlot(a: TradeApproach, channel: Channel, periods?: OpenPerio
       : undefined,
     closed: closed.map((d) => DAY[d]),
     known,
+    days,
+    window: [w0, w1] as [number, number],
+    label: `${fmt(w0)} – ${fmt(w1)}`,
   };
 }
 

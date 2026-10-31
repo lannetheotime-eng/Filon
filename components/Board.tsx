@@ -19,8 +19,13 @@ export default function Board({
   routeUrl: (stops: Lead[]) => string;
 }) {
   const [over, setOver] = useState<Stage | null>(null);
+  const [q, setQ] = useState("");
   const today = new Date().toISOString().slice(0, 10);
-  const ids = Object.keys(pipeline).filter((id) => leads[id]);
+  const norm = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const allIds = Object.keys(pipeline).filter((id) => leads[id]);
+  const ids = q.trim()
+    ? allIds.filter((id) => norm(`${leads[id].name} ${leads[id].city} ${leads[id].address} ${pipeline[id].notes}`).includes(norm(q.trim())))
+    : allIds;
 
   function exportCsv() {
     const rows = ids.map((id) => {
@@ -59,7 +64,10 @@ export default function Board({
             {dueCount > 0 && <> · <span className="error">{dueCount} relance{dueCount > 1 ? "s" : ""} à faire aujourd'hui</span></>}
           </p>
         </div>
-        <button className="btn ghost" onClick={exportCsv} disabled={!ids.length}>Exporter en CSV</button>
+        <div className="board-tools">
+          <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un nom, une ville, une note…" aria-label="Rechercher dans le pipeline" />
+          <button className="btn ghost" onClick={exportCsv} disabled={!ids.length}>Exporter en CSV</button>
+        </div>
       </div>
       <div className="board">
         {STAGES.map((s) => {
