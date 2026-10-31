@@ -2,7 +2,7 @@ import type { Lead, Profile } from "./types";
 import { getTrade } from "./trades";
 
 const signature = (p: Profile) =>
-  [p.firstName + (p.studio ? ` · ${p.studio}` : ""), p.phone, p.email, p.site].filter(Boolean).join("\n");
+  [(p.firstName || "") + (p.studio ? ` · ${p.studio}` : ""), p.phone, p.email, p.site].filter(Boolean).join("\n");
 
 function reviewsLine(l: Lead) {
   if (!l.reviews) return "";
@@ -87,7 +87,7 @@ export function objections(l: Lead, p: Profile) {
   ];
 }
 
-export function emails(l: Lead, p: Profile) {
+export function emails(l: Lead, p: Profile, reportUrl?: string) {
   const proof = reviewsLine(l);
   const issues = l.audit?.issues || [];
   const t = getTrade(l.tradeId)!;
@@ -105,7 +105,7 @@ ${intro}
 En cherchant ${t.singular} à ${l.city}, je suis tombé sur ${l.name}${proof ? ` (${proof} sur Google, bravo)` : ""}. J'ai regardé votre site et j'ai relevé quelques points qui vous font sans doute perdre des clients :
 
 ${issues.slice(0, 4).map((i) => `• ${i}`).join("\n")}
-
+${reportUrl ? `\nLe détail, avec pourquoi chaque point compte : ${reportUrl}\n` : ""}
 ${close}
 
 Bonne journée,

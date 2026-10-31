@@ -142,7 +142,7 @@ type Tile = { low: { latitude: number; longitude: number }; high: { latitude: nu
 function tiles(c: Commune, deep: boolean): Tile[] {
   const b = bbox(c);
   const pop = c.population || 10000;
-  const n = deep ? Math.max(1, Math.min(4, Math.ceil(Math.sqrt(pop / 60000)))) : 1;
+  const n = deep ? Math.max(1, Math.min(3, Math.ceil(Math.sqrt(pop / 60000)))) : 1; // 9 zones max = 27 requêtes
   const out: Tile[] = [];
   const dLat = (b.maxLat - b.minLat) / n, dLng = (b.maxLng - b.minLng) / n;
   for (let i = 0; i < n; i++)

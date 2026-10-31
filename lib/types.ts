@@ -110,12 +110,12 @@ export type Profile = {
 };
 
 export const DEFAULT_PROFILE: Profile = {
-  firstName: "Theo",
-  studio: "Thot Studio",
+  firstName: "",
+  studio: "",
   phone: "",
   email: "",
-  site: "thot-studio.fr",
-  offer: "un site vitrine sur mesure, optimisé pour Google en local, avec la maintenance incluse",
+  site: "",
+  offer: "l'hébergement, la maintenance et le suivi du référencement local, par abonnement mensuel",
   price: "",
   portfolio: "",
 };

@@ -5,6 +5,7 @@ import { STAGES, PRESENCE_LABEL } from "../lib/types";
 import { getTrade } from "../lib/trades";
 import { visitScript, objections, emails, directMessages } from "../lib/generators";
 import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
+import { encodeReport } from "../lib/report";
 
 type Tab = "plan" | "visite" | "emails" | "messages";
 
@@ -96,7 +97,9 @@ export default function LeadDrawer({
   }
 
   const q = encodeURIComponent(`${lead.name} ${lead.city}`);
-  const mails = emails(lead, profile);
+  const rep = encodeReport(lead, profile);
+  const reportUrl = rep && typeof window !== "undefined" ? `${location.origin}/rapport?d=${rep}` : undefined;
+  const mails = emails(lead, profile, reportUrl);
   const script = visitScript(lead, profile);
   const objs = objections(lead, profile);
   const plan = approachPlan(lead, profile);
@@ -124,6 +127,8 @@ export default function LeadDrawer({
             <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(mails[0].subject)}&body=${encodeURIComponent(mails[0].body)}`}>Écrire un e-mail</a>
             {lead.mapsUrl && <a className="btn ghost small" href={lead.mapsUrl} target="_blank" rel="noreferrer">Fiche Google</a>}
             {lead.website && <a className="btn ghost small" href={lead.website} target="_blank" rel="noreferrer">Son site</a>}
+            {reportUrl && <a className="btn ghost small" href={reportUrl} target="_blank" rel="noreferrer">Rapport d'audit</a>}
+            {reportUrl && <Copy text={reportUrl} label="Copier le lien du rapport" />}
             {lead.socialUrl && <a className="btn ghost small" href={lead.socialUrl} target="_blank" rel="noreferrer">Sa page</a>}
             <a className="btn ghost small" href={`https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">Instagram</a>
           </div>

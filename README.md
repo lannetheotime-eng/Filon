@@ -10,7 +10,8 @@ Outil de prospection : trouve les entreprises sans site web dans une ville, donn
 - **Fiche entreprise** : appel en un clic, fiche Google, recherche Instagram et LinkedIn, lien vers l'annuaire officiel des entreprises pour trouver le nom du gérant.
 - **Script d'appel** en 4 temps + réponses aux 5 objections courantes, adaptés au métier.
 - **3 e-mails** (premier contact, relance J+3, dernière relance J+10) et **3 messages** (Instagram, LinkedIn, SMS après appel).
-- **Prompt de site** : vraies infos, horaires et avis Google à la demande, direction artistique et effet signature propres au métier, variante choisie selon l'entreprise (deux boulangeries n'ont pas le même site), SEO local avec JSON-LD.
+- **Plan d'approche par entreprise** : canal, créneau croisé avec ses horaires, dirigeant (registre officiel), angle, arguments factuels, objections probables, cadence de relance.
+- **Sites à refaire** : audit automatique des sites existants et rapport partageable.
 - **Pipeline Kanban** (glisser-déposer) avec notes, date de relance et alerte des relances du jour, export CSV.
 - **Réglages** : prénom, studio, offre et prix utilisés dans tous les textes.
 
@@ -44,15 +45,40 @@ Coût : chaque scan rapide fait 1 à 3 requêtes Text Search ; un scan complet d
 
 `APP_PASSWORD` est important : sans lui, n'importe qui trouvant l'adresse pourrait consommer ta clé.
 
-## Passer en SaaS (étape suivante)
+## Comptes et synchronisation (facultatif)
 
-L'architecture est prête, il reste à ajouter :
+Sans base de données, Filon tourne en **mode simple** : un mot de passe unique (`APP_PASSWORD`) et les données dans le navigateur.
 
-- **Comptes** : Supabase Auth (ou Clerk) à la place du mot de passe unique.
-- **Base de données** : tables `leads`, `pipeline`, `profiles`, `scans` dans Supabase à la place du stockage navigateur (`lib/store.ts`).
-- **Crédits** : décompter les recherches par utilisateur dans `app/api/scan/route.ts`, et mettre les résultats en cache par ville et métier pour ne pas repayer Google à chaque client.
-- **Paiement** : Stripe Checkout + webhooks pour les forfaits.
-- **Légal** : CGV, politique de confidentialité, et vérification des conditions de Google sur la conservation des données Places (seul l'identifiant `place_id` peut être stocké durablement).
+Pour activer les **comptes** et retrouver son pipeline sur tous ses appareils :
+
+1. Dans Vercel, ouvre le projet, onglet **Storage**, puis **Create Database** → **Upstash for Redis** (offre gratuite) et connecte-la au projet.
+2. Redéploie. Les variables `KV_REST_API_URL` et `KV_REST_API_TOKEN` sont ajoutées automatiquement et le mode comptes s'active.
+3. Ouvre Filon : le **premier compte créé devient administrateur**. Les suivants ont besoin d'une invitation (Réglages → Inviter quelqu'un), sauf si `OPEN_SIGNUP=1`.
+
+Variables facultatives :
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `AUTH_SECRET` | Clé de signature des sessions | dérivée des autres secrets |
+| `MONTHLY_CALLS` | Requêtes Google par utilisateur et par mois (hors administrateur) | 300 |
+| `DAILY_CALLS` | Plafond de requêtes Google pour tout l'outil, par jour | 300 |
+| `OPEN_SIGNUP` | `1` pour ouvrir les inscriptions sans invitation | fermé |
+
+## Rapport d'audit partageable
+
+Pour chaque site à refaire, la fiche propose un lien vers un **rapport d'audit** public (`/rapport`), aux couleurs neutres et signé avec le nom de l'utilisateur. Le rapport tient entièrement dans le lien : rien n'est stocké sur le serveur.
+
+## Avant de vendre
+
+Déjà en place : comptes, invitations, synchronisation, crédits par utilisateur, plafond global, rapport d'audit, appli installable, sauvegarde et restauration.
+
+Reste à faire :
+
+- **Paiement** : Stripe Checkout et webhooks, en reliant chaque forfait à `monthlyLimit`.
+- **Hébergement** : l'offre gratuite Hobby de Vercel est réservée à un usage non commercial ; passer sur l'offre Pro.
+- **Conditions Google** : seuls les identifiants `place_id` peuvent être conservés durablement. Pour un usage commercial, rafraîchir le contenu des entreprises suivies depuis Google plutôt que de le stocker, et garder la mention « Données : Google ».
+- **Pages légales** : CGV, mentions légales, politique de confidentialité (les noms de dirigeants sont des données personnelles).
+- **Envoi d'e-mails** depuis l'outil (Resend ou équivalent) et page de présentation.
 
 ## Rappel légal
 

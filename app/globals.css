@@ -379,3 +379,57 @@ table.mini td + td, table.mini th + th { text-align: right; font-family: var(--d
   .bottom-nav b { position: absolute; top: 2px; left: calc(50% + 6px); background: var(--mark); color: #fff; font-size: 10px; font-family: var(--data); border-radius: 999px; padding: 0 5px; line-height: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } .btn, .switch span, .switch span::after { transition: none; } }
+
+/* ——— Connexion ——— */
+.auth { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+.auth-card { width: min(420px, 100%); background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 32px 28px; box-shadow: var(--shadow); display: grid; gap: 14px; }
+.auth-card h1 { font-family: var(--display); font-size: 28px; letter-spacing: -0.02em; margin: 6px 0 0; }
+.auth-card form { display: grid; gap: 4px; }
+.auth-card .btn.big { justify-content: center; margin-top: 8px; }
+.link { border: 0; background: none; color: var(--mark-ink); font-weight: 600; cursor: pointer; padding: 4px 0; justify-self: start; }
+
+/* ——— Rapport d'audit public ——— */
+.report { min-height: 100vh; padding: 40px 16px 60px; display: grid; justify-items: center; align-content: start; }
+.report-card { width: min(760px, 100%); background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius-l); padding: clamp(24px, 5vw, 48px); box-shadow: var(--shadow); }
+.report-head h1 { font-family: var(--display); font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.03em; line-height: 1.05; margin: 6px 0 6px; text-wrap: balance; }
+.report-head a { color: var(--mark-ink); font-weight: 600; overflow-wrap: anywhere; }
+.report-score { display: flex; gap: 24px; align-items: center; margin: 28px 0 8px; padding: 22px; border-radius: var(--radius-l); background: var(--old-soft); }
+.gauge-n { font-family: var(--data); line-height: 1; color: var(--old); white-space: nowrap; }
+.gauge-n strong { font-size: 64px; letter-spacing: -0.04em; }
+.gauge-n span { font-size: 18px; opacity: .7; }
+.report-score b { font-family: var(--display); font-size: 22px; }
+.report-score p { margin: 4px 0 0; color: var(--ink-2); }
+.report h2 { font-family: var(--display); font-size: 20px; margin: 32px 0 12px; }
+.report-issues { margin: 0; padding: 0; list-style: none; counter-reset: i; display: grid; gap: 12px; }
+.report-issues li { counter-increment: i; border: 1px solid var(--line); border-radius: var(--radius-s); padding: 14px 16px 14px 52px; position: relative; }
+.report-issues li::before { content: counter(i); position: absolute; left: 16px; top: 14px; width: 24px; height: 24px; border-radius: 50%; background: var(--old); color: #fff; font-family: var(--data); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.report-issues h3 { margin: 0 0 4px; font-size: 16px; }
+.report-issues p { margin: 0; color: var(--ink-2); }
+.report-good { margin: 0; padding-left: 20px; color: var(--ok); font-weight: 600; }
+.report-foot { margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; gap: 14px; color: var(--ink-2); font-size: 14px; }
+.report-foot p { margin: 0; }
+.report-contact { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink); }
+.report-contact a { color: var(--mark-ink); }
+@media print {
+  body { background: #fff; }
+  .report { padding: 0; }
+  .report-card { border: 0; box-shadow: none; }
+  .no-print { display: none; }
+}
+
+/* ——— Compte, consommation, accueil ——— */
+.usage { max-width: 1400px; margin: -6px auto 14px; padding: 0 28px; font-size: 13px; color: var(--ink-3); }
+.onboard { max-width: 1400px; margin: 0 auto 24px; padding: 0 28px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.onboard > div:first-child { flex: 1 1 300px; background: var(--mark-soft); border-radius: var(--radius-s); padding: 12px 16px; }
+.onboard p { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
+.onboard-fields { display: flex; gap: 8px; flex-wrap: wrap; }
+.onboard-fields input { border: 1px solid var(--line); background: var(--sheet); border-radius: var(--radius-s); padding: 8px 10px; min-width: 0; width: 170px; }
+.attrib { font-size: 12px; color: var(--ink-3); margin: 10px 4px 0; }
+.sync { font-size: 12px; color: var(--ok); white-space: nowrap; }
+.sync.error { color: var(--alert); }
+.sync.saving, .sync.loading { color: var(--ink-3); }
+.set-h { font-family: var(--display); font-size: 20px; margin: 32px 0 10px; }
+.set-block { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 16px 18px; margin-bottom: 14px; display: grid; gap: 10px; }
+.set-block p { margin: 0; }
+.invite input { width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: var(--radius-s); padding: 9px 11px; font-size: 14px; }
+@media (max-width: 900px) { .usage, .onboard { padding-left: 16px; padding-right: 16px; } }

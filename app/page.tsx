@@ -1,10 +1,11 @@
 "use client";
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { TRADES, getTrade } from "../lib/trades";
 import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } from "../lib/types";
 import { DEFAULT_PROFILE, PRESENCE_LABEL } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
+import { mergeData, toSync, type SyncData } from "../lib/sync";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
@@ -14,6 +15,8 @@ const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loa
 
 type View = "scan" | "pipeline" | "bilan" | "reglages";
 type Recent = { city: string; tradeId: string; at: string };
+type Usage = { used: number; limit: number | null; today: number; dailyLimit: number };
+type Me = { mode: "simple" | "comptes"; user: { email: string; role: "admin" | "user" } | null; usage: Usage | null; google: boolean };
 
 function Score({ value }: { value: number }) {
   const r = 20, c = 2 * Math.PI * r;
@@ -45,8 +48,15 @@ export default function Home() {
   const [recent, setRecent] = usePersistent<Recent[]>("filon.recent", []);
   const [result, setResult] = usePersistent<ScanResult | null>("filon.last", null);
   const [leads, setLeads] = usePersistent<Record<string, Lead>>("filon.leads", {});
-  const [pipeline, setPipeline] = usePersistent<Record<string, PipelineEntry>>("filon.pipeline", {});
-  const [profile, setProfile] = usePersistent<Profile>("filon.profile", DEFAULT_PROFILE);
+  const [pipeline, setPipeline, ready] = usePersistent<Record<string, PipelineEntry>>("filon.pipeline", {});
+  const [profile, setProfileRaw] = usePersistent<Profile>("filon.profile", DEFAULT_PROFILE);
+  const [profileAt, setProfileAt] = usePersistent<string>("filon.profileAt", "");
+  const setProfile = (p: Profile) => { setProfileRaw(p); setProfileAt(new Date().toISOString()); };
+  const [me, setMe] = useState<Me | null>(null);
+  const [sync, setSync] = useState<"off" | "loading" | "ok" | "saving" | "error">("off");
+  const [invite, setInvite] = useState("");
+  const [importMsg, setImportMsg] = useState("");
+  const synced = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -56,6 +66,79 @@ export default function Home() {
   const [mobileView, setMobileView] = useState<"list" | "map">("list");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmReset, setConfirmReset] = useState(false);
+
+  // Compte, mode et consommation
+  useEffect(() => {
+    fetch("/api/auth/me").then((r) => r.json()).then(setMe).catch(() => setMe(null));
+  }, []);
+
+  // Synchro : au chargement, fusion avec la version enregistrée sur le serveur
+  useEffect(() => {
+    if (!ready || !me?.user || synced.current) return;
+    setSync("loading");
+    fetch("/api/data")
+      .then((r) => r.json())
+      .then(({ data }: { data: SyncData | null }) => {
+        const merged = mergeData(toSync(pipeline, leads, profile, profileAt, recent), data);
+        setPipeline(merged.pipeline);
+        setLeads((prev) => ({ ...prev, ...merged.leads }));
+        if (merged.profile) setProfileRaw(merged.profile);
+        if (merged.profileAt) setProfileAt(merged.profileAt);
+        if (merged.recent) setRecent(merged.recent);
+        synced.current = true;
+        setSync("ok");
+      })
+      .catch(() => setSync("error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, me]);
+
+  // Puis enregistrement automatique, une seconde après chaque modification
+  useEffect(() => {
+    if (!synced.current) return;
+    const t = setTimeout(() => {
+      setSync("saving");
+      fetch("/api/data", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toSync(pipeline, leads, profile, profileAt, recent)) })
+        .then((r) => setSync(r.ok ? "ok" : "error"))
+        .catch(() => setSync("error"));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [pipeline, profile, profileAt, recent, leads]);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    location.href = "/connexion";
+  }
+
+  async function newInvite() {
+    const r = await fetch("/api/invite", { method: "POST" });
+    const j = await r.json();
+    if (r.ok) setInvite(`${location.origin}/connexion?invitation=${j.code}`);
+  }
+
+  function exportAll() {
+    const data = { version: 1, exportedAt: new Date().toISOString(), ...toSync(pipeline, leads, profile, profileAt, recent) };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `filon-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function importAll(file?: File) {
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text()) as SyncData;
+      if (!data.pipeline || !data.leads) throw new Error();
+      const merged = mergeData(toSync(pipeline, leads, profile, profileAt, recent), data);
+      setPipeline(merged.pipeline);
+      setLeads((prev) => ({ ...prev, ...merged.leads }));
+      if (merged.profile) setProfileRaw(merged.profile);
+      setImportMsg(`Sauvegarde importée : ${Object.keys(data.pipeline).length} entreprises suivies.`);
+    } catch {
+      setImportMsg("Ce fichier n'est pas une sauvegarde Filon.");
+    }
+  }
 
   async function runScan(c = city, t = tradeId) {
     setLoading(true);
@@ -69,6 +152,7 @@ export default function Home() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
+      if (j.usage) setMe((m) => (m ? { ...m, usage: j.usage } : m));
       setResult(j);
       setKind("all");
       setLeads((prev) => {
@@ -145,7 +229,7 @@ export default function Home() {
   return (
     <>
       <nav className="top">
-        <div className="logo"><i aria-hidden />Filon<small>par Thot Studio</small></div>
+        <div className="logo"><i aria-hidden />Filon{profile.studio && <small>{profile.studio}</small>}</div>
         <div className="tabs">
           {NAV.map(([id, label]) => (
             <button key={id} className="tab" aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>
@@ -155,6 +239,11 @@ export default function Home() {
         </div>
         <div className="spacer" />
         {result?.demo && <span className="demo">Mode démo : données fictives</span>}
+        {me?.user && (
+          <span className={`sync ${sync}`} title={me.user.email}>
+            {sync === "saving" ? "Enregistrement…" : sync === "error" ? "Non synchronisé" : sync === "loading" ? "Synchronisation…" : "Synchronisé"}
+          </span>
+        )}
       </nav>
 
       {view === "scan" && (
@@ -188,6 +277,31 @@ export default function Home() {
             </label>
             {error && <span className="error">{error}</span>}
           </div>
+          {me?.usage && me.google && (
+            <p className="usage">
+              {me.usage.limit != null
+                ? `${me.usage.used} / ${me.usage.limit} requêtes Google ce mois-ci`
+                : `${me.usage.used} requête${me.usage.used > 1 ? "s" : ""} Google ce mois-ci`}
+              {` · ${me.usage.today} / ${me.usage.dailyLimit} aujourd'hui. Scan rapide : 1 à 3, scan complet : jusqu'à 27.`}
+            </p>
+          )}
+          {ready && !profile.firstName && (
+            <div className="onboard">
+              <div>
+                <b>Bienvenue sur Filon</b>
+                <p>Renseigne ton prénom et ton studio : ils signent tes e-mails, tes scripts et tes rapports d'audit.</p>
+              </div>
+              <div className="onboard-fields">
+                <input aria-label="Prénom" placeholder="Prénom" id="ob-first" />
+                <input aria-label="Studio" placeholder="Studio ou entreprise" id="ob-studio" />
+                <button className="btn small" onClick={() => {
+                  const f = (document.getElementById("ob-first") as HTMLInputElement).value.trim();
+                  const st = (document.getElementById("ob-studio") as HTMLInputElement).value.trim();
+                  if (f) setProfile({ ...profile, firstName: f, studio: st });
+                }}>Enregistrer</button>
+              </div>
+            </div>
+          )}
 
           {recent.length > 0 && (
             <div className="recent">
@@ -284,6 +398,7 @@ export default function Home() {
                       Baisse la note ou le nombre d'avis minimum, ou lance un scan complet.
                     </div>
                   )}
+                  <p className="attrib">Données des entreprises : Google. Analyse des sites : Filon.</p>
                 </div>
               </div>
             </section>
@@ -319,7 +434,7 @@ export default function Home() {
       {view === "reglages" && (
         <main className="settings">
           <h1>Réglages</h1>
-          <p>Ces infos signent tes e-mails, messages et scripts, et nourrissent le plan d'approche. Elles restent dans ce navigateur.</p>
+          <p>Ces infos signent tes e-mails, tes scripts et tes rapports d'audit, et nourrissent le plan d'approche.</p>
           <div className="row2">
             <label className="field">Prénom<input value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} /></label>
             <label className="field">Studio<input value={profile.studio} onChange={(e) => setProfile({ ...profile, studio: e.target.value })} /></label>
@@ -330,7 +445,41 @@ export default function Home() {
           </div>
           <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
           <label className="field">Ce que tu proposes ensuite (abonnement, suivi…)<textarea value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></label>
-          <p className="hint">Le pipeline et les entreprises trouvées sont enregistrés dans ce navigateur : exporte-les en CSV pour les garder ailleurs.</p>
+          <h2 className="set-h">Compte</h2>
+          {me?.mode === "comptes" && me.user ? (
+            <div className="set-block">
+              <p>Connecté en tant que <b>{me.user.email}</b>{me.user.role === "admin" ? " (administrateur)" : ""}. Ton pipeline et tes réglages sont synchronisés sur tous tes appareils.</p>
+              <div className="actions">
+                {me.user.role === "admin" && <button className="btn small" onClick={newInvite}>Inviter quelqu'un</button>}
+                <button className="btn ghost small" onClick={logout}>Se déconnecter</button>
+              </div>
+              {invite && (
+                <div className="invite">
+                  <p className="hint">Lien d'invitation valable 30 jours, utilisable une fois :</p>
+                  <input readOnly value={invite} onFocus={(e) => e.target.select()} aria-label="Lien d'invitation" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="set-block">
+              <p>Filon fonctionne en mode simple : un mot de passe unique, et tes données restent dans ce navigateur.</p>
+              <p className="hint">Pour avoir des comptes et retrouver ton pipeline sur téléphone et ordinateur, branche une base Redis gratuite au projet dans Vercel (Storage). Les comptes s'activent tout seuls.</p>
+            </div>
+          )}
+
+          <h2 className="set-h">Sauvegarde</h2>
+          <div className="set-block">
+            <p>Télécharge ton pipeline, tes notes et tes réglages, ou restaure une sauvegarde.</p>
+            <div className="actions">
+              <button className="btn ghost small" onClick={exportAll}>Télécharger une sauvegarde</button>
+              <label className="btn ghost small" style={{ cursor: "pointer" }}>
+                Importer une sauvegarde
+                <input type="file" accept="application/json" hidden onChange={(e) => importAll(e.target.files?.[0])} />
+              </label>
+            </div>
+            {importMsg && <p className="hint">{importMsg}</p>}
+          </div>
+
           {confirmReset ? (
             <div className="actions">
               <span className="error">Tout effacer de ce navigateur ?</span>
@@ -338,7 +487,7 @@ export default function Home() {
               <button className="btn ghost small" onClick={() => setConfirmReset(false)}>Annuler</button>
             </div>
           ) : (
-            <button className="btn ghost small" onClick={() => setConfirmReset(true)}>Effacer les données</button>
+            <button className="btn ghost small" onClick={() => setConfirmReset(true)}>Effacer les données de ce navigateur</button>
           )}
         </main>
       )}
