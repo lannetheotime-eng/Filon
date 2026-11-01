@@ -7,11 +7,23 @@ import { activity } from "./site";
 type Ch = "visite" | "email" | "message";
 const h = (hh: number, mm = 0) => hh * 60 + mm;
 
+// Tes séries, telles qu'on les voit sur ton Instagram
+export const SERIES = {
+  vacances: { name: "Vacances et architecture", hint: "villa et piscine, chalet, liseuse à la fenêtre, bord de mer" },
+  totems: { name: "Totems géométriques", hint: "formats longs encadrés, fonds de couleur" },
+  typo: { name: "Typo street", hint: "« Exhibe mes dunks », « Et je fume un dragon », « Seul face à mon reflet »" },
+  ium: { name: "Portraits « -ium »", hint: "Léonium, Nikitium…" },
+  sport: { name: "Sport", hint: "terrains de basket, de tennis, en aplats bleus et roses" },
+  silhouettes: { name: "Silhouettes bleues", hint: "portraits en aplats bleus et rouges" },
+} as const;
+export type SeriesId = keyof typeof SERIES;
+
 export type ArtVenue = {
   id: string;
   label: string; // pluriel
   singular: string;
   query: string; // requête Google Places
+  hidden?: boolean; // anciens types, gardés pour les fiches déjà suivies
   // Approche
   channel: Ch;
   secondary: Ch;
@@ -21,132 +33,163 @@ export type ArtVenue = {
   ask: string;
   why: string; // pourquoi ce canal
   // Argumentaire
+  series: SeriesId[]; // séries à apporter, dans l'ordre
   wall: string; // ce que tes tableaux apportent à ce lieu
-  pick: string; // quelles pièces apporter
   compliment: string; // accroche sincère, à adapter
   likely: string[]; // objections les plus probables
+  collab?: boolean; // tes collabs avec des restos et bars sont la meilleure preuve ici
 };
 
-const SHOP = { channel: "visite" as Ch, secondary: "message" as Ch, days: [2, 3, 4], window: [h(14, 30), h(17)] as [number, number], ask: "Demande le ou la gérante, c'est lui ou elle qui choisit la déco.", why: "Un tableau se vend en vrai : la matière, le format, l'effet sur le mur. Passe avec une pièce sous le bras." };
+const SHOP = { channel: "visite" as Ch, secondary: "message" as Ch, days: [2, 3, 4], window: [h(14, 30), h(17)] as [number, number], ask: "Demande le ou la gérante.", why: "Un tableau se vend en vrai : la matière, le format, l'effet sur le mur. Passe avec une pièce sous le bras." };
 const RESTO = { ...SHOP, window: [h(15), h(17, 30)] as [number, number], avoid: "les services du midi et du soir", ask: "Demande le patron ou la patronne, hors service." };
+const MAIL = { channel: "email" as Ch, secondary: "visite" as Ch, days: [2, 3], window: [h(10), h(11, 30)] as [number, number] };
 
 export const ART_VENUES: ArtVenue[] = [
   {
-    id: "art-japonais", label: "Restos japonais et ramen", singular: "restaurant japonais", query: "restaurant japonais ramen",
-    ...RESTO, days: [2, 3, 4],
-    wall: "Un tableau à l'univers japonais prolonge l'expérience de la carte : les clients le prennent en photo, et la photo circule sur Instagram avec le nom du resto.",
-    pick: "deux pièces à thème Japon (rue, cuisine, personnages) dans des formats moyens, faciles à accrocher en salle",
-    compliment: "J'adore l'ambiance de votre salle, on sent que l'univers est soigné.",
+    id: "art-deco", label: "Boutiques de déco", singular: "boutique de déco", query: "boutique décoration intérieure",
+    ...SHOP, window: [h(10, 30), h(12)], avoid: "le samedi",
+    series: ["vacances", "totems"],
+    wall: "Leurs clients viennent chercher ce qu'on ne trouve pas dans les grandes enseignes : des affiches originales d'un illustrateur local, encadrées, c'est exactement ça.",
+    compliment: "Vous avez une sélection vraiment différente des grandes enseignes.",
+    likely: ["depot", "marge", "style"],
+  },
+  {
+    id: "art-concept", label: "Concept stores", singular: "concept store", query: "concept store",
+    ...SHOP, window: [h(10, 30), h(12)], avoid: "le samedi",
+    series: ["totems", "vacances", "typo"],
+    wall: "Un concept store vend une sélection : tes pièces aux murs renforcent son identité, et parlent à ses clients.",
+    compliment: "Votre sélection est super cohérente, on sent un vrai regard.",
+    likely: ["depot", "budget", "style"],
+  },
+  {
+    id: "art-resto", label: "Restos de caractère", singular: "restaurant", query: "restaurant cantine bistronomique",
+    ...RESTO, series: ["vacances", "silhouettes"], collab: true,
+    wall: "Des murs qui ont une identité, c'est ce que les clients retiennent et prennent en photo : la photo circule ensuite sur Instagram avec le nom du resto.",
+    compliment: "J'adore l'ambiance de votre salle, on sent que tout est choisi.",
     likely: ["deja-deco", "budget", "proprio"],
   },
   {
-    id: "art-asie", label: "Restos coréens et asiatiques", singular: "restaurant asiatique", query: "restaurant coréen asiatique",
-    ...RESTO,
-    wall: "Des murs qui racontent un univers, c'est ce qui fait revenir et ce qui se partage en photo.",
-    pick: "deux pièces colorées, très graphiques, qui ressortent même en photo de téléphone",
-    compliment: "Votre déco a une vraie personnalité, ça change des restos tous pareils.",
-    likely: ["style", "budget", "proprio"],
-  },
-  {
     id: "art-bar", label: "Bars et bars à cocktails", singular: "bar", query: "bar à cocktails",
-    ...SHOP, days: [2, 3, 4], window: [h(17), h(18, 30)], avoid: "les soirs de forte affluence et le week-end",
+    ...SHOP, window: [h(17), h(18, 30)], avoid: "les soirs de forte affluence et le week-end",
+    series: ["typo", "ium"], collab: true,
     wall: "Dans un bar, les murs font partie de l'ambiance : une pièce forte devient un repère (« on se retrouve sous le tableau »).",
-    pick: "une grande pièce qui claque et une plus petite pour le comptoir ou les toilettes",
     compliment: "L'ambiance est top ici, et vous avez de beaux murs à habiller.",
     likely: ["deja-deco", "budget", "mail"],
   },
   {
     id: "art-cafe", label: "Cafés et coffee shops", singular: "café", query: "coffee shop",
     ...SHOP, window: [h(14, 30), h(16, 30)], avoid: "le rush du matin et du midi",
-    wall: "Les clients y restent longtemps, ordinateur ou café à la main : ils ont le temps de regarder les murs, et de demander qui a fait le tableau.",
-    pick: "deux formats moyens, ambiance douce ou pop selon le lieu",
+    series: ["vacances", "totems"],
+    wall: "Les clients y restent longtemps : ils ont le temps de regarder les murs, et de demander qui a fait l'affiche.",
     compliment: "C'est un des cafés les plus agréables du coin, on a envie d'y rester.",
     likely: ["budget", "place", "proprio"],
   },
   {
-    id: "art-concept", label: "Concept stores", singular: "concept store", query: "concept store",
-    ...SHOP, window: [h(10, 30), h(12)], avoid: "le samedi",
-    wall: "Un concept store vend une sélection : tes tableaux aux murs renforcent son identité, et peuvent intéresser ses clients.",
-    pick: "trois pièces de styles proches pour montrer une vraie série",
-    compliment: "Votre sélection est super cohérente, on sent un vrai regard.",
-    likely: ["depot", "budget", "style"],
+    id: "art-hotel", label: "Hôtels de caractère", singular: "hôtel", query: "hôtel boutique",
+    ...MAIL, avoid: "les heures d'arrivée et de départ",
+    ask: "Demande le nom du directeur ou de la personne en charge de la déco.",
+    why: "La décision se prend rarement à l'accueil : un e-mail au directeur, puis un rendez-vous avec une pièce.",
+    series: ["vacances", "totems"],
+    wall: "Un hôtel vend une expérience : des affiches d'un illustrateur de la ville, sur l'évasion et l'architecture, dans le lobby ou les chambres, c'est un argument pour ses clients.",
+    compliment: "Votre hôtel a une vraie identité, ça se ressent dans la déco.",
+    likely: ["proprio", "budget", "mail"],
   },
   {
-    id: "art-deco", label: "Boutiques de déco", singular: "boutique de déco", query: "boutique décoration intérieure",
-    ...SHOP, window: [h(10, 30), h(12)], avoid: "le samedi",
-    wall: "Leurs clients viennent chercher ce qu'on ne trouve pas ailleurs : des pièces originales d'un artiste local, c'est exactement ça.",
-    pick: "trois pièces de formats différents pour montrer la gamme",
-    compliment: "Vous avez une sélection vraiment différente des grandes enseignes.",
-    likely: ["depot", "marge", "style"],
+    id: "art-gite", label: "Gîtes et chambres d'hôtes", singular: "chambre d'hôtes", query: "chambre d'hôtes gîte",
+    ...MAIL, secondary: "message", avoid: "le week-end (arrivées)",
+    ask: "Écris directement au propriétaire, c'est lui qui décore.",
+    why: "Les propriétaires sont rarement sur place en journée : un e-mail ou un message Instagram avec deux visuels.",
+    series: ["vacances"],
+    wall: "Ta villa ou ton chalet au mur, c'est l'ambiance « vacances » que ses voyageurs viennent chercher, et une chambre qu'on retient sur les photos de l'annonce.",
+    compliment: "Votre maison est superbe sur les photos, on a envie d'y aller.",
+    likely: ["budget", "deja-deco", "mail"],
   },
   {
-    id: "art-manga", label: "Boutiques manga et BD", singular: "boutique manga", query: "boutique manga",
-    ...SHOP, window: [h(14), h(16, 30)], avoid: "le samedi et les jours de sortie",
-    wall: "Leur clientèle est exactement ton public : tes pièces y sont à leur place, aux murs comme à la vente.",
-    pick: "tes pièces les plus manga, dont une en grand format pour le mur principal",
-    compliment: "Je viens souvent ici, c'est une des meilleures boutiques du coin.",
-    likely: ["depot", "marge", "place"],
+    id: "art-archi", label: "Architectes d'intérieur et agences immo", singular: "architecte d'intérieur", query: "architecte d'intérieur",
+    ...MAIL, avoid: "le lundi matin",
+    ask: "Écris au fondateur ou à la fondatrice de l'agence.",
+    why: "Ce sont des prescripteurs : un e-mail soigné avec tes visuels, puis un rendez-vous.",
+    series: ["vacances", "totems"],
+    wall: "Ta série architecture parle leur langage : pour leur agence, et pour les intérieurs qu'ils livrent à leurs clients.",
+    compliment: "J'aime beaucoup vos réalisations, il y a une vraie signature.",
+    likely: ["marge", "budget", "mail"],
   },
   {
-    id: "art-galerie", label: "Galeries d'art", singular: "galerie", query: "galerie d'art",
-    channel: "email", secondary: "visite", days: [2, 3], window: [h(10), h(12)], avoid: "les jours de vernissage",
-    ask: "Écris au galeriste ou au directeur artistique, par son nom.",
-    why: "Les galeries reçoivent beaucoup de demandes : un e-mail court avec tes visuels et ton Instagram est la règle.",
-    wall: "Une galerie cherche des artistes qui ont un univers reconnaissable et une communauté : montre les deux.",
-    pick: "un dossier de cinq à huit visuels de la même série, avec formats et prix",
-    compliment: "J'ai beaucoup aimé votre dernière exposition.",
-    likely: ["depot", "style", "mail"],
-  },
-  {
-    id: "art-tatouage", label: "Tatoueurs", singular: "salon de tatouage", query: "salon de tatouage",
-    ...SHOP, days: [2, 3], window: [h(11), h(13)], avoid: "pendant les séances (demande quand ils sont libres)",
-    secondary: "message",
-    wall: "Un salon de tatouage, c'est une galerie d'images : les clients attendent, regardent les murs, et partagent un univers graphique proche du tien.",
-    pick: "deux pièces très graphiques, contrastées",
-    compliment: "Le travail affiché ici est vraiment fort.",
+    id: "art-sneakers", label: "Sneakers et streetwear", singular: "boutique streetwear", query: "boutique sneakers streetwear",
+    ...SHOP, window: [h(14), h(16, 30)], avoid: "le samedi et les jours de drop",
+    series: ["typo", "silhouettes"],
+    wall: "Leur clientèle vit dans la culture street : « Exhibe mes dunks » sur leur mur, c'est leur univers en une image.",
+    compliment: "Votre boutique a un vrai style, rien à voir avec les grandes chaînes.",
     likely: ["style", "budget", "place"],
   },
   {
     id: "art-barbier", label: "Barbiers", singular: "barber shop", query: "barber shop",
     ...SHOP, days: [2, 3], window: [h(10), h(11, 30)], avoid: "le samedi et les fins de journée",
+    series: ["typo", "silhouettes"],
     wall: "Les clients passent vingt minutes face au miroir : le mur derrière eux, c'est ce qu'ils voient… et ce qu'ils prennent en photo.",
-    pick: "deux pièces au style affirmé, format moyen",
     compliment: "Votre salon a un vrai style, ça se voit dès l'entrée.",
     likely: ["budget", "deja-deco", "proprio"],
   },
   {
-    id: "art-hotel", label: "Hôtels de caractère", singular: "hôtel", query: "hôtel boutique",
-    channel: "email", secondary: "visite", days: [2, 3], window: [h(10), h(11, 30)], avoid: "les heures d'arrivée et de départ",
-    ask: "Demande le nom du directeur ou de la personne en charge de la déco.",
-    why: "La décision se prend rarement à l'accueil : un e-mail au directeur, puis un rendez-vous.",
-    wall: "Un hôtel de caractère vend une expérience locale : des œuvres d'un artiste de la ville dans le lobby ou les chambres, c'est un argument pour ses clients.",
-    pick: "une sélection de visuels pensée par pièce (lobby, couloirs, chambres)",
-    compliment: "Votre hôtel a une vraie identité, ça se ressent dans la déco.",
-    likely: ["proprio", "budget", "mail"],
+    id: "art-tatouage", label: "Tatoueurs", singular: "salon de tatouage", query: "salon de tatouage",
+    ...SHOP, days: [2, 3], window: [h(11), h(13)], avoid: "pendant les séances (demande quand ils sont libres)",
+    series: ["totems", "typo"],
+    wall: "Un salon de tatouage, c'est une galerie d'images : tes totems géométriques parlent le même langage graphique que leurs flashs.",
+    compliment: "Le travail affiché ici est vraiment fort.",
+    likely: ["style", "budget", "place"],
   },
   {
-    id: "art-jeux", label: "Bars à jeux et gaming", singular: "bar à jeux", query: "bar à jeux",
+    id: "art-padel", label: "Clubs de padel et de tennis", singular: "club de padel", query: "club de padel",
+    ...SHOP, days: [2, 3, 4], window: [h(10), h(12)], avoid: "les soirs et le week-end (pleins)",
+    ask: "Demande le gérant ou la gérante du club.",
+    series: ["sport"],
+    wall: "Ta série sport, c'est leur terrain en affiche : au club-house, à l'accueil ou au bar, ça habille le lieu et ça plaît aux joueurs.",
+    compliment: "Le club est super bien tenu, et l'espace d'accueil a du potentiel.",
+    likely: ["budget", "proprio", "deja-deco"],
+  },
+  {
+    id: "art-geek", label: "Bars à jeux et boutiques BD", singular: "bar à jeux", query: "bar à jeux boutique bd",
     ...SHOP, window: [h(15), h(17, 30)], avoid: "les soirs de tournoi et le week-end",
-    wall: "Un public geek et pop culture : un univers manga sur les murs leur parle immédiatement.",
-    pick: "tes pièces les plus pop et manga",
+    series: ["ium", "typo"],
+    wall: "Un public pop culture, qui reconnaît tout de suite les références de tes portraits « -ium ».",
     compliment: "Le concept est génial, c'est exactement le genre d'endroit qui manquait.",
     likely: ["budget", "deja-deco", "proprio"],
   },
   {
     id: "art-disquaire", label: "Disquaires et boutiques vintage", singular: "disquaire", query: "disquaire vinyle",
     ...SHOP, window: [h(14), h(16, 30)], avoid: "le samedi",
-    wall: "Un public qui aime l'objet, l'image, la pochette : la sérigraphie et l'affiche lui parlent.",
-    pick: "deux pièces dans un esprit affiche ou pochette",
+    series: ["ium", "typo"],
+    wall: "Un public qui aime l'objet, l'image, la pochette : l'affiche lui parle.",
     compliment: "Votre boutique a une vraie âme, on pourrait y passer des heures.",
     likely: ["depot", "place", "budget"],
   },
+  {
+    id: "art-galerie", label: "Galeries d'art", singular: "galerie", query: "galerie d'art",
+    ...MAIL, window: [h(10), h(12)], avoid: "les jours de vernissage",
+    ask: "Écris au galeriste ou au directeur artistique, par son nom.",
+    why: "Les galeries reçoivent beaucoup de demandes : un e-mail court avec tes visuels et ton Instagram est la règle.",
+    series: ["totems", "vacances"],
+    wall: "Une galerie cherche des artistes qui ont un univers reconnaissable et une communauté : montre une série complète, pas des pièces isolées.",
+    compliment: "J'ai beaucoup aimé votre dernière exposition.",
+    likely: ["depot", "style", "mail"],
+  },
+  // Anciens types, gardés pour les fiches déjà dans le pipeline
+  { id: "art-japonais", label: "Restos japonais", singular: "restaurant japonais", query: "restaurant japonais", hidden: true, ...RESTO, series: ["totems", "silhouettes"], wall: "Des murs qui ont une identité, c'est ce que les clients retiennent et prennent en photo.", compliment: "J'adore l'ambiance de votre salle.", likely: ["deja-deco", "budget", "proprio"] },
+  { id: "art-asie", label: "Restos asiatiques", singular: "restaurant asiatique", query: "restaurant asiatique", hidden: true, ...RESTO, series: ["totems", "silhouettes"], wall: "Des murs qui ont une identité, c'est ce que les clients retiennent et prennent en photo.", compliment: "Votre déco a une vraie personnalité.", likely: ["style", "budget", "proprio"] },
+  { id: "art-manga", label: "Boutiques manga", singular: "boutique manga", query: "boutique manga", hidden: true, ...SHOP, avoid: "le samedi", series: ["ium", "typo"], wall: "Un public pop culture, qui reconnaît tout de suite tes références.", compliment: "C'est une des meilleures boutiques du coin.", likely: ["depot", "marge", "place"] },
+  { id: "art-jeux", label: "Bars à jeux", singular: "bar à jeux", query: "bar à jeux", hidden: true, ...SHOP, avoid: "les soirs de tournoi", series: ["ium", "typo"], wall: "Un public pop culture, qui reconnaît tout de suite tes références.", compliment: "Le concept est génial.", likely: ["budget", "deja-deco", "proprio"] },
 ];
 
-export const getArtVenue = (id: string) => ART_VENUES.find((v) => v.id === id);
+export const getArtVenue = (id: string) => ART_VENUES.find((v) => v.id === id) || ART_VENUES[0];
 export const isArt = (tradeId?: string) => !!tradeId && tradeId.startsWith("art-");
+export const seriesFor = (tradeId: string) => getArtVenue(tradeId).series.map((id) => SERIES[id]);
+const pickText = (v: ArtVenue) => {
+  const [a, b] = v.series.map((id) => SERIES[id]);
+  return `une pièce de ta série ${a.name} (${a.hint})${b ? `, et une de ${b.name} en plan B` : ""}`;
+};
 
-// Univers proche du tien : mots-clés dans le nom ou la catégorie Google
-const UNIVERSE = /japon|japan|tokyo|osaka|kyoto|nippon|ramen|sushi|izakaya|udon|gyoza|bento|matcha|manga|otaku|anime|kawaii|sakura|ninja|samoura|samurai|geek|r[ée]tro|arcade|pixel|tattoo|tatou|ink|vinyl|street|pop|cor[ée]e|korea|seoul|kimchi|bao|dim sum|neon|n[ée]on|comics|bd/i;
+// Lieu à forte identité : mots-clés dans le nom ou la catégorie Google
+const UNIVERSE = /design|d[ée]co|concept|atelier|vintage|r[ée]tro|street|sneaker|urban|graphi|\bart\b|galerie|loft|studio|cr[ée]ateur|craft|vinyl|tattoo|tatou|\bink\b|brunch|cantine|guinguette|rooftop|speakeasy|padel|villa|chalet|lodge|boh[eè]me|archi/i;
 
 export function instagramOf(l: Lead) {
   return [l.socialUrl, l.website].find((u) => u && /instagram\.com/i.test(u));
@@ -156,9 +199,12 @@ export function instagramOf(l: Lead) {
 export function artFit(l: Lead) {
   const reasons: string[] = [];
   let score = 0;
-  const text = `${l.name} ${l.category || ""}`;
+  // On retire les mots du type de lieu cherché : « boutique de déco » ne compte pas comme un signe
+  const v = getArtVenue(l.tradeId);
+  const own = `${v.query} ${v.singular}`.toLowerCase().split(/[\s']+/).filter((w) => w.length > 3);
+  const text = `${l.name} ${l.category || ""}`.split(/[\s']+/).filter((w) => !own.includes(w.toLowerCase())).join(" ");
   const universe = UNIVERSE.test(text);
-  if (universe) { score += 40; reasons.push("Univers proche du tien"); }
+  if (universe) { score += 40; reasons.push("Lieu à forte identité : il a l'œil pour la déco"); }
   const reviews = l.reviews || 0;
   if (reviews >= 300) { score += 30; reasons.push(`Très fréquenté (${reviews} avis) : tes tableaux seront vus`); }
   else if (reviews >= 80) { score += 18; reasons.push(`Bien fréquenté (${reviews} avis)`); }
@@ -189,6 +235,7 @@ const instaUrl = (p: Profile) => {
   const h = (p.art?.instagram || "").trim().replace(/^@/, "");
   return !h ? "" : h.startsWith("http") ? h : `instagram.com/${h}`;
 };
+const refs = (p: Profile) => lines(p.art?.references).slice(0, 3);
 const style = (p: Profile) => p.art?.style?.trim() || "des tableaux";
 const me = (p: Profile) => p.firstName || "moi";
 
@@ -198,9 +245,9 @@ export function artSteps(l: Lead, p: Profile) {
   const price = priceText(p);
   const extras = lines(p.art?.extras);
   return [
-    { title: "Arriver avec une pièce", text: `Viens avec ${v.pick}. Le tableau fait le pitch à ta place : on ne vend pas une œuvre en photo.` },
+    { title: "Arriver avec une pièce", text: `Viens avec ${pickText(v)}. Le tableau fait le pitch à ta place : on ne vend pas une œuvre en photo.` },
     { title: "Lui montrer chez lui", text: "Propose de poser la pièce contre le mur, là où elle irait. Il ne s'imagine plus le tableau : il le voit chez lui, et c'est là que la décision se prend." },
-    { title: "Prouver ton univers", text: `Ouvre ton Instagram${handle(p) ? ` (${handle(p)})` : ""} sur ton téléphone : la série complète, et si tu l'as, une photo d'une de tes pièces déjà accrochée chez quelqu'un.` },
+    { title: "Prouver ton univers", text: `Ouvre ton Instagram${handle(p) ? ` (${handle(p)})` : ""} sur ton téléphone : la série complète${refs(p).length ? `, puis tes collabs (${refs(p).join(", ")})${v.collab ? " : ici, c'est ton meilleur argument" : ""}` : ", et si tu l'as, une photo d'une de tes pièces déjà accrochée chez quelqu'un"}.` },
     { title: "Annoncer le prix simplement", text: price ? `Pièces ${price}${p.art?.formats ? `, formats : ${p.art.formats}` : ""}.${extras.length ? ` ${extras.join(". ")}.` : ""}` : "Renseigne ta fourchette de prix dans Réglages › Tes tableaux." },
     { title: "Conclure", text: "« Celle-ci, ou on part sur une série de deux ou trois pour ce mur ? » Une question à choix, pas « vous en pensez quoi ? »." },
   ];
@@ -210,10 +257,10 @@ export function artScript(l: Lead, p: Profile) {
   const v = getArtVenue(l.tradeId)!;
   const price = priceText(p);
   return [
-    { step: "En entrant", text: `Bonjour, je suis ${me(p)}, je fais ${style(p)} ici à ${l.city}. Est-ce que je peux voir le ou la responsable deux minutes, quand vous aurez un moment ?` },
+    { step: "En entrant", text: `Bonjour, je suis ${me(p)}, je fais ${style(p)} ici, à ${l.city}. Est-ce que je peux voir le ou la responsable deux minutes, quand vous aurez un moment ?` },
     { step: "L'accroche", text: `${v.compliment} Je me suis dit que mes tableaux auraient leur place sur vos murs.` },
     { step: "Montrer", text: `(Tu poses la pièce contre le mur.) Regardez ce que ça donne ici. ${v.wall.split(":")[0]}.` },
-    { step: "La preuve", text: `Voilà le reste de la série${handle(p) ? `, tout est sur mon Instagram ${handle(p)}` : ""}. Ce sont des pièces originales, faites ici.` },
+    { step: "La preuve", text: `Voilà le reste de la série${handle(p) ? `, tout est sur mon Instagram ${handle(p)}` : ""}. Ce sont des créations originales, faites ici.${refs(p).length ? ` J'ai aussi travaillé avec ${refs(p).join(" et ")}.` : ""}` },
     { step: "Le prix", text: price ? `Les pièces sont ${price}. ${lines(p.art?.extras)[0] ? lines(p.art?.extras)[0] + "." : ""}` : "Les pièces sont à [ton prix]." },
     { step: "Conclure", text: "Vous préférez celle-ci, ou je vous en apporte deux ou trois pour composer le mur ?" },
     { step: "S'il hésite", text: "Pas de souci. Je vous laisse ma carte et je repasse la semaine prochaine avec deux autres pièces, comme ça vous comparez en vrai." },
@@ -253,7 +300,7 @@ Je suis ${me(p)}, je fais ${style(p)} à ${l.city}.
 
 ${v.compliment} ${v.wall}
 
-Vous pouvez voir mon travail ici${instaUrl(p) ? ` : ${instaUrl(p)}` : " (visuels en pièce jointe)"}.${price ? ` Les pièces sont ${price}${p.art?.formats ? `, en ${p.art.formats}` : ""}.` : ""}
+${refs(p).length ? `J'ai déjà travaillé avec ${refs(p).join(", ")}. ` : ""}Vous pouvez voir mon travail ici${instaUrl(p) ? ` : ${instaUrl(p)}` : " (visuels en pièce jointe)"}.${price ? ` Les pièces sont ${price}${p.art?.formats ? `, en ${p.art.formats}` : ""}.` : ""}
 
 Je peux passer vous en montrer une ou deux en vrai, sur le mur où elles iraient : cela prend cinq minutes.
 
@@ -289,7 +336,7 @@ export function artObjections(p: Profile) {
 export function artPrep(l: Lead, p: Profile) {
   const v = getArtVenue(l.tradeId)!;
   const prep = [
-    `Choisir ${v.pick}.`,
+    `Choisir ${pickText(v)}.`,
     instagramOf(l) ? "Regarder leur Instagram : repère les murs nus ou ternes sur leurs photos." : "Chercher leur Instagram pour voir la salle et les murs.",
     "Option qui marche très bien : un montage de ta pièce sur une photo de leur mur, à montrer sur ton téléphone.",
     "Prendre des cartes avec ton Instagram (ou un QR code).",

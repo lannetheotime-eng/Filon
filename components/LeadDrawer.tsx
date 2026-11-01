@@ -9,7 +9,7 @@ import { encodeReport } from "../lib/report";
 import { detectNeeds, proposal } from "../lib/needs";
 import { liveProof, roi, closingLine, ticketQuestion, lines } from "../lib/pitch";
 import { siteStatus, activity } from "../lib/site";
-import { isArt, artSteps, artScript, artMessages, artEmails, artObjections, instagramOf } from "../lib/art";
+import { isArt, artSteps, artScript, artMessages, artEmails, artObjections, instagramOf, seriesFor } from "../lib/art";
 
 type Tab = "plan" | "besoins" | "visite" | "emails" | "messages";
 
@@ -255,6 +255,13 @@ export default function LeadDrawer({
               </div>
             </div>
             <p className="angle">{plan.angle}</p>
+            {art && (
+              <div className="series">
+                {seriesFor(lead.tradeId).map((x, i) => (
+                  <div key={x.name}><span>{i ? "Plan B" : "Série à apporter"}</span><b>{x.name}</b><small>{x.hint}</small></div>
+                ))}
+              </div>
+            )}
 
             {art ? artSteps(lead, profile).map((x, i) => (
               <details className="step-card" open key={x.title}>

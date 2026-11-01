@@ -20,6 +20,7 @@ export type Trade = {
   hookDetail: string; // argument d'appel spécifique au métier
   variants: SiteVariant[];
   art?: boolean; // lieu à démarcher pour tes tableaux
+  hidden?: boolean; // ancien type, absent des listes
 };
 
 export const TRADES: Trade[] = [
@@ -243,7 +244,7 @@ export const TRADES: Trade[] = [
 // Lieux pour tes tableaux, au même format que les métiers (même scan, même pipeline)
 export const ART_TRADES: Trade[] = ART_VENUES.map((v) => ({
   id: v.id, label: v.label, singular: v.singular, query: v.query, hookDetail: v.wall,
-  effect: { name: "", description: "" }, sections: [], variants: [], art: true,
+  effect: { name: "", description: "" }, sections: [], variants: [], art: true, hidden: v.hidden,
 }));
 
 export function getTrade(id: string): Trade | undefined {

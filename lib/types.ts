@@ -132,6 +132,7 @@ export type ArtProfile = {
   priceTo?: number;
   formats?: string; // ex. « 30×40, 50×70 et 70×100 cm »
   extras?: string; // un avantage réel par ligne (livraison, accrochage…)
+  references?: string; // lieux qui ont déjà tes pièces ou une collab, un par ligne
 };
 
 export const DEFAULT_PROFILE: Profile = {

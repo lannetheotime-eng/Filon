@@ -357,7 +357,7 @@ export async function placeDetails(id: string): Promise<Details> {
 // ——— Mode démo : données fictives, pour essayer l'outil sans clé API ———
 function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false, includeAll = false): ScanResult {
   const trade = getTrade(tradeId)!;
-  const names = trade.art ? ["Tokyo Corner", "du Marché", "Neon", "Saint-Cyprien", "Sakura", "des Carmes", "Le Comptoir", "Pixel", "du Capitole", "Les Halles", "Kawaii", "Bonnet"] : ["du Marché", "Saint-Cyprien", "des Carmes", "Martin", "du Capitole", "Lafargue", "de la Gare", "Ferrand", "des Minimes", "Rouzaud", "du Canal", "Bonnet"];
+  const names = trade.art ? ["Atelier Carmes", "du Marché", "Loft Saint-Cyprien", "Le Comptoir", "Studio Riquet", "des Carmes", "Bohème", "du Capitole", "Les Halles", "Vintage Arnaud", "du Canal", "Bonnet"] : ["du Marché", "Saint-Cyprien", "des Carmes", "Martin", "du Capitole", "Lafargue", "de la Gare", "Ferrand", "des Minimes", "Rouzaud", "du Canal", "Bonnet"];
   const streets = ["rue des Lois", "allée Jean Jaurès", "rue de Metz", "place Dupuy", "avenue de Muret", "rue Riquet", "boulevard de Strasbourg", "rue Pargaminières"];
   let seed = tradeId.length * 97 + city.name.length * 13;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);

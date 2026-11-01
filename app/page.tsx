@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { TRADES, ART_TRADES, getTrade } from "../lib/trades";
-import { artFit, isArt, priceText } from "../lib/art";
+import { artFit, isArt, priceText, seriesFor } from "../lib/art";
 import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } from "../lib/types";
 import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
@@ -36,10 +36,10 @@ export default function Home() {
   const [view, setView] = useState<View>("scan");
   const [mode, setMode] = usePersistent<"sites" | "tableaux">("filon.mode", "sites");
   const [siteTrade, setSiteTrade] = usePersistent("filon.trade", "boulangerie");
-  const [artTrade, setArtTrade] = usePersistent("filon.artTrade", "art-japonais");
+  const [artTrade, setArtTrade] = usePersistent("filon.artTrade", "art-deco");
   const tradeId = mode === "tableaux" ? artTrade : siteTrade;
   const setTradeId = (id: string) => { if (isArt(id)) { setMode("tableaux"); setArtTrade(id); } else { setMode("sites"); setSiteTrade(id); } };
-  const LIST = mode === "tableaux" ? ART_TRADES : TRADES;
+  const LIST = mode === "tableaux" ? ART_TRADES.filter((t) => !t.hidden) : TRADES;
   const [artKind, setArtKind] = useState<"all" | "fit" | "insta">("all");
   const [city, setCity] = usePersistent("filon.city", "Toulouse");
   const [deep, setDeep] = usePersistent("filon.deep", false);
@@ -316,7 +316,7 @@ export default function Home() {
     ...([["scan", "Chercher des clients"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
       id: `v-${v}`, group: "Aller à", label, run: () => setView(v),
     })),
-    ...[...TRADES, ...ART_TRADES].map((t) => ({
+    ...[...TRADES, ...ART_TRADES.filter((t) => !t.hidden)].map((t) => ({
       id: `t-${t.id}`, group: t.art ? "Chercher des lieux pour tes tableaux" : "Chercher des clients", label: `${t.label} à ${city || "…"}`, hint: "1 à 3 requêtes",
       run: () => { setView("scan"); setTradeId(t.id); runScan(city, t.id); },
     })),
@@ -439,7 +439,7 @@ export default function Home() {
           {loading && (
             <section className="loading">
               <div className="steps">
-                {(mode === "tableaux" ? ["Recherche sur Google", "Repérage des lieux", "Univers et fréquentation", "Presque prêt"] : ["Recherche sur Google", "Analyse des sites", "Repérage des besoins", "Presque prêt"]).map((t, k) => (
+                {(mode === "tableaux" ? ["Recherche sur Google", "Repérage des lieux", "Identité et fréquentation", "Presque prêt"] : ["Recherche sur Google", "Analyse des sites", "Repérage des besoins", "Presque prêt"]).map((t, k) => (
                   <span key={t} className={k < step ? "done" : k === step ? "now" : ""}>{t}</span>
                 ))}
               </div>
@@ -451,8 +451,8 @@ export default function Home() {
             <section className="empty-start">
               {mode === "tableaux" ? (
                 <>
-                  <h1>Mets tes tableaux sur les <span>bons murs</span>.</h1>
-                  <p>Un type de lieu, une ville. Filon repère ceux qui collent à ton univers, et te dit comment leur vendre une pièce.</p>
+                  <h1>Mets tes affiches sur les <span>bons murs</span>.</h1>
+                  <p>Un type de lieu, une ville. Filon repère ceux qui ont l'œil pour la déco, te dit quelle série apporter et comment vendre ta pièce.</p>
                   {!profile.art?.priceFrom && <p className="hint">Pense à renseigner ton Instagram et tes prix dans Réglages › Tes tableaux : ils sont repris dans tes messages.</p>}
                 </>
               ) : (
@@ -462,7 +462,7 @@ export default function Home() {
                 </>
               )}
               <div className="quick-trades">
-                {(mode === "tableaux" ? ART_TRADES.map((t) => t.id).slice(0, 9) : ["boulangerie", "coiffeur", "restaurant", "garage", "plombier", "avocat", "fleuriste", "beaute"]).map((id) => (
+                {(mode === "tableaux" ? ART_TRADES.filter((t) => !t.hidden).map((t) => t.id).slice(0, 10) : ["boulangerie", "coiffeur", "restaurant", "garage", "plombier", "avocat", "fleuriste", "beaute"]).map((id) => (
                   <button key={id} className={`qt ${tradeId === id ? "on" : ""}`} onClick={() => setTradeId(id)}>{getTrade(id)?.label}</button>
                 ))}
               </div>
@@ -500,7 +500,7 @@ export default function Home() {
 
               <div className="res-bar">
                 <div className="segments" role="tablist" aria-label="Type de prospect">
-                  {artMode && ([["all", "Tous", result.leads.length], ["fit", "Univers proche", result.leads.filter((l) => fits[l.id]?.universe).length], ["insta", "Sur Instagram", result.leads.filter((l) => fits[l.id]?.insta).length]] as const).filter(([k, , n]) => k === "all" || n > 0).map(([k, label, n]) => (
+                  {artMode && ([["all", "Tous", result.leads.length], ["fit", "Forte identité", result.leads.filter((l) => fits[l.id]?.universe).length], ["insta", "Sur Instagram", result.leads.filter((l) => fits[l.id]?.insta).length]] as const).filter(([k, , n]) => k === "all" || n > 0).map(([k, label, n]) => (
                     <button key={k} role="tab" aria-selected={artKind === k} className="seg" onClick={() => setArtKind(k)}>{label} <b>{n}</b></button>
                   ))}
                   {!artMode && (["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
@@ -563,12 +563,12 @@ export default function Home() {
                               <div className="row-text">
                                 <h3>{l.name}</h3>
                                 <div className="meta">
-                                  {fit ? <span className={`pill ${fit.universe ? "none" : fit.insta ? "social" : "ok"}`}>{fit.universe ? "Univers proche" : fit.insta ? "Instagram" : "À démarcher"}</span> : <span className={`pill ${rs.tone}`}>{rs.label}</span>}
+                                  {fit ? <span className={`pill ${fit.universe ? "none" : fit.insta ? "social" : "ok"}`}>{fit.universe ? "Forte identité" : fit.insta ? "Instagram" : "À démarcher"}</span> : <span className={`pill ${rs.tone}`}>{rs.label}</span>}
                                   {l.rating ? <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span> : null}
                                   {act && <span>depuis {act.since}</span>}
                                 </div>
                                 {top && <div className="next">→ {top.title}</div>}
-                                {fit && fit.reasons.filter((x) => x !== "Univers proche du tien")[0] && <div className="next">→ {fit.reasons.filter((x) => x !== "Univers proche du tien")[0]}</div>}
+                                {fit && <div className="next">→ Apporte : {seriesFor(l.tradeId)[0].name}</div>}
                               </div>
                             </button>
                             <div className="side">
@@ -641,11 +641,14 @@ export default function Home() {
                 <>
                   <div className="row2">
                     <label className="field">Ton Instagram<input value={a.instagram || ""} placeholder="@tprod_creation" onChange={(e) => set({ instagram: e.target.value })} /></label>
-                    <label className="field">Ce que tu fais<input value={a.style || ""} placeholder="ex. des toiles et illustrations originales" onChange={(e) => set({ style: e.target.value })} /></label>
+                    <label className="field">Ce que tu fais<input value={a.style || ""} placeholder="des affiches illustrées en édition limitée" onChange={(e) => set({ style: e.target.value })} /></label>
                     <label className="field">Prix à partir de (€)<input type="number" inputMode="numeric" min="0" step="10" value={a.priceFrom ?? ""} onChange={(e) => set({ priceFrom: num(e.target.value) })} /></label>
                     <label className="field">Jusqu'à (€, facultatif)<input type="number" inputMode="numeric" min="0" step="10" value={a.priceTo ?? ""} onChange={(e) => set({ priceTo: num(e.target.value) })} /></label>
                     <label className="field">Formats<input value={a.formats || ""} placeholder="30×40, 50×70 et 70×100 cm" onChange={(e) => set({ formats: e.target.value })} /></label>
                   </div>
+                  <label className="field">Lieux qui ont déjà tes pièces ou une collab avec toi (un par ligne)
+                    <textarea value={a.references || ""} placeholder={"L'Arrosoir, cantine et breuvages\nHomard & Co"} onChange={(e) => set({ references: e.target.value })} />
+                  </label>
                   <label className="field">Ce que tu offres en plus (un par ligne, seulement ce qui est vrai)
                     <textarea value={a.extras || ""} placeholder={"Livraison offerte sur Toulouse\nAccrochage offert"} onChange={(e) => set({ extras: e.target.value })} />
                   </label>
