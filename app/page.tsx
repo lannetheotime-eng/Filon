@@ -12,6 +12,8 @@ import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
 import Today from "../components/Today";
+import Palette, { type PaletteItem } from "../components/Palette";
+import Toast from "../components/Toast";
 import { IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
 
 const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loading: () => <div className="map" /> });
@@ -62,6 +64,19 @@ export default function Home() {
   const [mobileView, setMobileView] = useState<"list" | "map">("list");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const notify = useCallback((m: string) => setToast(m), []);
+  const [step, setStep] = useState(0);
+
+  // ⌘K / Ctrl+K : palette de commandes
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette((v) => !v); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Compte, mode et consommation
   useEffect(() => {
@@ -187,6 +202,8 @@ export default function Home() {
     setLoading(true);
     setError("");
     setSelected([]);
+    setStep(0);
+    const tick = setInterval(() => setStep((x) => Math.min(x + 1, 3)), 1800);
     try {
       const r = await fetch("/api/scan", {
         method: "POST",
@@ -209,6 +226,7 @@ export default function Home() {
     } catch (e: any) {
       setError(e.message || "Le scan a échoué.");
     } finally {
+      clearInterval(tick);
       setLoading(false);
     }
   }
@@ -253,7 +271,9 @@ export default function Home() {
   );
 
   function addMany(ids: string[]) {
+    const n = ids.filter((id) => !pipeline[id]).length;
     for (const id of ids) if (!pipeline[id]) updatePipeline(id, { stage: "a_contacter" });
+    if (n) notify(`${n} entreprise${n > 1 ? "s ajoutées" : " ajoutée"} au pipeline`);
   }
 
   function toggle(id: string) {
@@ -278,6 +298,25 @@ export default function Home() {
   const pipelineCount = Object.keys(pipeline).length;
   const selLeads = selected.map((id) => leads[id]).filter(Boolean);
 
+  const paletteItems: PaletteItem[] = [
+    ...([["scan", "Chercher des clients"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
+      id: `v-${v}`, group: "Aller à", label, run: () => setView(v),
+    })),
+    ...TRADES.map((t) => ({
+      id: `t-${t.id}`, group: "Chercher", label: `${t.label} à ${city || "…"}`, hint: "1 à 3 requêtes",
+      run: () => { setView("scan"); setTradeId(t.id); runScan(city, t.id); },
+    })),
+    ...Object.keys(pipeline).filter((id) => leads[id]).map((id) => ({
+      id: `p-${id}`, group: "Ton pipeline", label: leads[id].name, hint: `${leads[id].city} · ${STAGES.find((x) => x.id === pipeline[id].stage)?.label}`,
+      run: () => setOpenId(id),
+    })),
+    ...(result?.leads || []).filter((l) => !pipeline[l.id]).map((l) => ({
+      id: `r-${l.id}`, group: "Dernière recherche", label: l.name, hint: rowStatus(l).label, run: () => { setView("scan"); setOpenId(l.id); },
+    })),
+    { id: "a-save", group: "Actions", label: "Télécharger une sauvegarde", run: exportAll },
+    { id: "a-prices", group: "Actions", label: "Régler mes tarifs", run: () => setView("reglages") },
+  ];
+
   const NAV: [View, string, () => React.ReactElement][] = [
     ["scan", "Chercher", IconScan],
     ["today", "Aujourd'hui", IconToday],
@@ -288,23 +327,22 @@ export default function Home() {
 
   return (
     <>
-      <nav className="top">
+      <header className="top">
         <div className="logo"><i aria-hidden />Filon{profile.studio && <small>{profile.studio}</small>}</div>
-        <div className="tabs">
-          {NAV.map(([id, label]) => (
-            <button key={id} className="tab" aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>
-              {label}{id === "pipeline" && pipelineCount > 0 && <b>{pipelineCount}</b>}
-            </button>
-          ))}
+        <button className="cmdk" onClick={() => setPalette(true)} aria-label="Ouvrir la palette de commandes">
+          <span>Rechercher, ouvrir, lancer…</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <div className="top-right">
+          {result?.demo && <span className="demo">Démo</span>}
+          {me?.user && (
+            <span className={`sync ${sync}`} title={me.user.email}>
+              {sync === "saving" ? "Enregistrement…" : sync === "error" ? "Hors ligne" : sync === "loading" ? "Synchro…" : "Synchronisé"}
+            </span>
+          )}
+          {profile.firstName && <span className="avatar" title={profile.firstName}>{profile.firstName.slice(0, 1).toUpperCase()}</span>}
         </div>
-        <div className="spacer" />
-        {result?.demo && <span className="demo">Mode démo : données fictives</span>}
-        {me?.user && (
-          <span className={`sync ${sync}`} title={me.user.email}>
-            {sync === "saving" ? "Enregistrement…" : sync === "error" ? "Non synchronisé" : sync === "loading" ? "Synchronisation…" : "Synchronisé"}
-          </span>
-        )}
-      </nav>
+      </header>
 
       {view === "scan" && (
         <main className="find">
@@ -380,10 +418,26 @@ export default function Home() {
             </div>
           )}
 
+          {loading && (
+            <section className="loading">
+              <div className="steps">
+                {["Recherche sur Google", "Analyse des sites", "Repérage des besoins", "Presque prêt"].map((t, k) => (
+                  <span key={t} className={k < step ? "done" : k === step ? "now" : ""}>{t}</span>
+                ))}
+              </div>
+              <ul className="list skel">{Array.from({ length: 6 }).map((_, k) => <li key={k} className="row"><span /><span /><span /></li>)}</ul>
+            </section>
+          )}
+
           {!result && !loading && (
             <section className="empty-start">
-              <h1>Trouve tes prochains clients</h1>
-              <p>Choisis un métier et une ville. Filon repère les entreprises sans site ou avec un site à refaire, et te dit comment les approcher.</p>
+              <h1>Trouve tes prochains <span>clients</span>.</h1>
+              <p>Un métier, une ville. Filon repère qui a besoin de toi et te dit comment l'approcher.</p>
+              <div className="quick-trades">
+                {["boulangerie", "coiffeur", "restaurant", "garage", "plombier", "avocat", "fleuriste", "beaute"].map((id) => (
+                  <button key={id} className={`qt ${tradeId === id ? "on" : ""}`} onClick={() => setTradeId(id)}>{getTrade(id)?.label}</button>
+                ))}
+              </div>
               {recent.length > 0 && (
                 <div className="recent">
                   {recent.map((r) => (
@@ -396,7 +450,7 @@ export default function Home() {
             </section>
           )}
 
-          {result && (
+          {result && !loading && (
             <section className="results">
               <div className="res-head">
                 <h1><b>{result.leads.length}</b> {trade.label.toLowerCase()} à {result.city.name}</h1>
@@ -449,7 +503,7 @@ export default function Home() {
                         </label>
                       )}
                       <button onClick={() => addMany(shown.map((l) => l.id))} disabled={!shown.length}>Tout ajouter au pipeline</button>
-                      <button onClick={exportScan} disabled={!shown.length}>Exporter en CSV</button>
+                      <button onClick={() => { exportScan(); notify("Export CSV téléchargé"); }} disabled={!shown.length}>Exporter en CSV</button>
                     </div>
                   </details>
                 </div>
@@ -472,6 +526,7 @@ export default function Home() {
                               <input type="checkbox" checked={isSel} onChange={() => toggle(l.id)} aria-label={`Ajouter ${l.name} à la tournée`} />
                             </label>
                             <button className="row-main" onClick={() => setOpenId(l.id)}>
+                              <span className={`mono ${rs.tone}`} aria-hidden>{l.name.replace(/^(boulangerie|salon de coiffure|garage|restaurant|boucherie|fleuriste|institut)\s+(de la |du |des |de |d')?/i, "").slice(0, 1).toUpperCase()}</span>
                               <div className="row-text">
                                 <h3>{l.name}</h3>
                                 <div className="meta">
@@ -486,7 +541,7 @@ export default function Home() {
                               {inPipe ? (
                                 <span className="tag in">Suivi</span>
                               ) : (
-                                <button className="add" onClick={() => updatePipeline(l.id, { stage: "a_contacter" })} aria-label={`Ajouter ${l.name} au pipeline`}>+</button>
+                                <button className="add" onClick={() => { updatePipeline(l.id, { stage: "a_contacter" }); notify(`${l.name} ajoutée au pipeline`); }} aria-label={`Ajouter ${l.name} au pipeline`}>+</button>
                               )}
                             </div>
                           </li>
@@ -639,8 +694,12 @@ export default function Home() {
         ))}
       </nav>
 
+      <Palette open={palette} onClose={() => setPalette(false)} items={paletteItems} />
+      <Toast msg={toast} onDone={() => setToast(null)} />
+
       {openLead && (
         <LeadDrawer
+          notify={notify}
           lead={openLead}
           profile={profile}
           entry={pipeline[openLead.id]}

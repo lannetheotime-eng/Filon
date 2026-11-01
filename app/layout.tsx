@@ -2,7 +2,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import type { Metadata } from "next";
 
-export const viewport = { themeColor: "#154dff", width: "device-width", initialScale: 1, viewportFit: "cover" as const };
+export const viewport = { themeColor: "#050506", width: "device-width", initialScale: 1, viewportFit: "cover" as const };
 
 export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Filon", statusBarStyle: "default" },

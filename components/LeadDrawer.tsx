@@ -40,6 +40,7 @@ export default function LeadDrawer({
   onPipeline,
   canSpend = () => true,
   onSpend = () => {},
+  notify = () => {},
 }: {
   lead: Lead;
   profile: Profile;
@@ -48,6 +49,7 @@ export default function LeadDrawer({
   onPipeline: (patch: Partial<PipelineEntry> | null) => void;
   canSpend?: (n: number) => boolean;
   onSpend?: (n: number) => void;
+  notify?: (m: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("plan");
   const [details, setDetails] = useState<Details | null>(null);
@@ -109,6 +111,7 @@ export default function LeadDrawer({
 
   function markContacted(channel: PipelineEntry["channel"]) {
     onPipeline({ stage: "contacte", channel, contactedAt: new Date().toISOString(), followUp: entry?.followUp || plusDays(3) });
+    notify(`Contact noté · relance prévue le ${new Date(entry?.followUp || plusDays(3)).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`);
   }
 
   const q = encodeURIComponent(`${lead.name} ${lead.city}`);
