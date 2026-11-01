@@ -641,7 +641,7 @@ export default function Home() {
                 <>
                   <div className="row2">
                     <label className="field">Ton Instagram<input value={a.instagram || ""} placeholder="@tprod_creation" onChange={(e) => set({ instagram: e.target.value })} /></label>
-                    <label className="field">Ce que tu fais<input value={a.style || ""} placeholder="des tableaux sérigraphiés, univers manga et Japon" onChange={(e) => set({ style: e.target.value })} /></label>
+                    <label className="field">Ce que tu fais<input value={a.style || ""} placeholder="ex. des toiles et illustrations originales" onChange={(e) => set({ style: e.target.value })} /></label>
                     <label className="field">Prix à partir de (€)<input type="number" inputMode="numeric" min="0" step="10" value={a.priceFrom ?? ""} onChange={(e) => set({ priceFrom: num(e.target.value) })} /></label>
                     <label className="field">Jusqu'à (€, facultatif)<input type="number" inputMode="numeric" min="0" step="10" value={a.priceTo ?? ""} onChange={(e) => set({ priceTo: num(e.target.value) })} /></label>
                     <label className="field">Formats<input value={a.formats || ""} placeholder="30×40, 50×70 et 70×100 cm" onChange={(e) => set({ formats: e.target.value })} /></label>
