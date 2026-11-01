@@ -139,6 +139,7 @@ export function upcomingMoments(tradeId: string, now = new Date(), horizonDays =
 }
 
 export function detectNeeds(l: Lead, opts: { now?: Date; created?: string } = {}): Need[] {
+  if (l.tradeId.startsWith("art-")) return []; // lieux pour tes tableaux : pas de besoins web ou print
   const now = opts.now || new Date();
   const year = now.getFullYear();
   const needs: Need[] = [];

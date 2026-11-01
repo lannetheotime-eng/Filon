@@ -9,6 +9,7 @@ import { encodeReport } from "../lib/report";
 import { detectNeeds, proposal } from "../lib/needs";
 import { liveProof, roi, closingLine, ticketQuestion, lines } from "../lib/pitch";
 import { siteStatus, activity } from "../lib/site";
+import { isArt, artSteps, artScript, artMessages, artEmails, artObjections, instagramOf } from "../lib/art";
 
 type Tab = "plan" | "besoins" | "visite" | "emails" | "messages";
 
@@ -115,11 +116,14 @@ export default function LeadDrawer({
   }
 
   const q = encodeURIComponent(`${lead.name} ${lead.city}`);
-  const rep = encodeReport(lead, profile);
+  const art = isArt(lead.tradeId);
+  const insta = instagramOf(lead);
+  const rep = art ? "" : encodeReport(lead, profile);
   const reportUrl = rep && typeof window !== "undefined" ? `${location.origin}/rapport?d=${rep}` : undefined;
-  const mails = emails(lead, profile, reportUrl);
-  const script = visitScript(lead, profile);
-  const objs = objections(lead, profile);
+  const mails = art ? artEmails(lead, profile) : emails(lead, profile, reportUrl);
+  const script = art ? artScript(lead, profile) : visitScript(lead, profile);
+  const objs = art ? artObjections(profile) : objections(lead, profile);
+  const msgs = art ? artMessages(lead, profile) : directMessages(lead, profile);
   const created = lead.created || dirs?.[0]?.created;
   const plan = approachPlan(lead, profile, created);
   const needs = detectNeeds(lead, { created });
@@ -159,7 +163,11 @@ export default function LeadDrawer({
           <p className="sub">{lead.address.replace(/, France$/, "")}{lead.phone ? ` · ${lead.phone}` : ""}</p>
 
           <div className="d-facts">
-            <div><span>Site</span><b className={st.kind === "wp" ? "is-wp" : st.kind === "other" ? "is-other" : ""}>{st.label}</b></div>
+            {art ? (
+              <div><span>Instagram</span><b>{insta ? "Compte trouvé" : "À chercher"}</b></div>
+            ) : (
+              <div><span>Site</span><b className={st.kind === "wp" ? "is-wp" : st.kind === "other" ? "is-other" : ""}>{st.label}</b></div>
+            )}
             <div><span>En activité</span><b>{act ? act.label.replace(/^Depuis /, "depuis ") : lead.id.startsWith("demo-") ? "—" : lead.registry === "none" || (dirs !== null && !dirs.length) ? "Inconnu" : "…"}</b></div>
             <div><span>Google</span><b>{lead.rating ? `${String(lead.rating).replace(".", ",")} ★ · ${lead.reviews} avis` : "Pas de note"}</b></div>
           </div>
@@ -167,6 +175,7 @@ export default function LeadDrawer({
 
           <div className="d-actions">
             <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lead.address)}`} target="_blank" rel="noreferrer">Itinéraire</a>
+            {art && <a className="btn ghost small" href={insta || `https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">{insta ? "Son Instagram" : "Chercher sur Instagram"}</a>}
             <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(mails[0].subject)}&body=${encodeURIComponent(mails[0].body)}`}>E-mail</a>
             {reportUrl && <Copy text={reportUrl} label="Lien du rapport d'audit" />}
             <details className="more">
@@ -220,11 +229,11 @@ export default function LeadDrawer({
         </section>
 
         <div className="subtabs" role="tablist">
-          {([
+          {((art ? [["plan", "Approche"], ["visite", "Textes"]] : [
             ["plan", "Approche"],
             ["besoins", `Offre${picked.length ? ` (${picked.length})` : ""}`],
             ["visite", "Textes"],
-          ] as [Tab, string][]).map(([id, label]) => (
+          ]) as [Tab, string][]).map(([id, label]) => (
             <button key={id} role="tab" aria-selected={tab === id || (id === "visite" && (tab === "emails" || tab === "messages"))} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
@@ -247,6 +256,13 @@ export default function LeadDrawer({
             </div>
             <p className="angle">{plan.angle}</p>
 
+            {art ? artSteps(lead, profile).map((x, i) => (
+              <details className="step-card" open key={x.title}>
+                <summary><i>{i + 1}</i> {x.title}</summary>
+                <p>{x.text}</p>
+              </details>
+            )) : (
+              <>
             <details className="step-card" open>
               <summary><i>1</i> Lui montrer, sur son téléphone</summary>
               <ol className="proof">{liveProof(lead).map((x) => <li key={x}>{x}</li>)}</ol>
@@ -280,9 +296,12 @@ export default function LeadDrawer({
               <p className="angle">{closingLine(picked[0]?.title || needs[0]?.title, picked[0] ? profile.prices?.[picked[0].service] : undefined)}</p>
             </details>
 
+              </>
+            )}
+
             <h3 className="sec">Pour aller plus loin</h3>
             <details className="fold">
-              <summary>Ses points faibles et tes arguments ({plan.facts.length})</summary>
+              <summary>{art ? "Pourquoi ce lieu" : "Ses points faibles et tes arguments"} ({plan.facts.length})</summary>
               <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}</ul>
             </details>
             <details className="fold">
@@ -357,7 +376,7 @@ export default function LeadDrawer({
         {(tab === "visite" || tab === "emails" || tab === "messages") && (
           <section>
             <div className="seg-mini" role="tablist">
-              {([["visite", "En boutique"], ["emails", "E-mails"], ["messages", "Messages"]] as const).map(([id, label]) => (
+              {([["visite", art ? "En vrai" : "En boutique"], ["emails", "E-mails"], ["messages", art ? "Instagram" : "Messages"]] as const).map(([id, label]) => (
                 <button key={id} role="tab" aria-selected={textTab === id} onClick={() => setTextTab(id)}>{label}{plan.channel === (id === "emails" ? "email" : id === "messages" ? "message" : "visite") ? " ★" : ""}</button>
               ))}
             </div>
@@ -393,7 +412,7 @@ export default function LeadDrawer({
               </>
             )}
 
-            {textTab === "messages" && directMessages(lead, profile).map((m) => (
+            {textTab === "messages" && msgs.map((m) => (
               <div className="block" key={m.label}>
                 <div className="bh"><b>{m.label}</b><Copy text={m.body} /></div>
                 <pre>{m.body}</pre>

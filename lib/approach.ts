@@ -2,6 +2,7 @@ import type { Lead, Profile, OpenPeriod } from "./types";
 import { getTrade } from "./trades";
 import { detectNeeds } from "./needs";
 import { activity } from "./site";
+import { getArtVenue, artFit, artPrep, instagramOf, priceText } from "./art";
 
 export type Channel = "visite" | "email" | "message";
 
@@ -208,7 +209,35 @@ const n = (x?: number) => String(x ?? "").replace(".", ",");
 const network = (url?: string) =>
   !url ? "" : /instagram/i.test(url) ? "Instagram" : /facebook|fb\.com/i.test(url) ? "Facebook" : /tiktok/i.test(url) ? "TikTok" : "un annuaire";
 
+// Lieux pour tes tableaux : même forme de plan, autre argumentaire
+function artPlan(l: Lead, p: Profile) {
+  const v = getArtVenue(l.tradeId)!;
+  let channel: Channel = v.channel;
+  const reasons = [v.why];
+  if (channel === "visite" && !l.openPeriods?.length && instagramOf(l)) reasons.push("Horaires inconnus mais compte Instagram trouvé : un message peut ouvrir la porte avant la visite.");
+  const secondary: Channel = channel === v.secondary ? "email" : v.secondary;
+  const slot = bestSlot({ channel, why: v.why, days: v.days, window: v.window, avoid: v.avoid, secondary, ask: v.ask, offer: "", needs: [] }, channel, l.openPeriods);
+  const fit = artFit(l);
+  const facts = [...fit.reasons];
+  if (l.reviews) facts.push(`${l.reviews} avis Google${l.rating ? `, note de ${n(l.rating)} / 5` : ""} : autant de personnes qui passent devant ses murs.`);
+  if (slot.known && slot.closed.length) facts.push(`Fermé le ${slot.closed.join(" et le ")}.`);
+  const price = priceText(p);
+  return {
+    channel, secondary, reasons, slot, avoid: v.avoid, ask: v.ask,
+    angle: v.wall,
+    facts,
+    offer: `Vente directe de tes pièces${price ? `, ${price}` : ""}`,
+    needs: [] as string[],
+    prep: artPrep(l, p),
+    likely: v.likely,
+    cadence: channel === "visite"
+      ? ["Le soir même : message Instagram avec la série complète.", "J+5 : repasser avec deux autres pièces.", "J+12 : dernier message, puis on classe."]
+      : ["J+4 : relance courte.", `J+8 : passer en vrai avec une pièce.`, "J+15 : dernier message, puis on classe."],
+  };
+}
+
 export function approachPlan(l: Lead, p: Profile, created?: string) {
+  if (l.tradeId.startsWith("art-")) return artPlan(l, p);
   const t = getTrade(l.tradeId)!;
   const a = APPROACH[l.tradeId] || SHOP({ offer: "un site vitrine clair et bien placé sur Google", needs: ["les horaires", "les services", "le contact"] });
 

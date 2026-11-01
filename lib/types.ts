@@ -122,6 +122,16 @@ export type Profile = {
   dailyCap?: number; // plafond de requêtes Google par jour (30 = reste dans le gratuit)
   guarantees?: string; // une garantie par ligne (uniquement ce que tu offres vraiment)
   references?: string; // un client de référence par ligne
+  art?: ArtProfile; // prospection de tes tableaux
+};
+
+export type ArtProfile = {
+  instagram?: string; // ton compte, ex. @moncompte
+  style?: string; // ex. « des tableaux sérigraphiés, univers manga et Japon »
+  priceFrom?: number;
+  priceTo?: number;
+  formats?: string; // ex. « 30×40, 50×70 et 70×100 cm »
+  extras?: string; // un avantage réel par ligne (livraison, accrochage…)
 };
 
 export const DEFAULT_PROFILE: Profile = {

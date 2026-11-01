@@ -357,7 +357,7 @@ export async function placeDetails(id: string): Promise<Details> {
 // ——— Mode démo : données fictives, pour essayer l'outil sans clé API ———
 function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false, includeAll = false): ScanResult {
   const trade = getTrade(tradeId)!;
-  const names = ["du Marché", "Saint-Cyprien", "des Carmes", "Martin", "du Capitole", "Lafargue", "de la Gare", "Ferrand", "des Minimes", "Rouzaud", "du Canal", "Bonnet"];
+  const names = trade.art ? ["Tokyo Corner", "du Marché", "Neon", "Saint-Cyprien", "Sakura", "des Carmes", "Le Comptoir", "Pixel", "du Capitole", "Les Halles", "Kawaii", "Bonnet"] : ["du Marché", "Saint-Cyprien", "des Carmes", "Martin", "du Capitole", "Lafargue", "de la Gare", "Ferrand", "des Minimes", "Rouzaud", "du Canal", "Bonnet"];
   const streets = ["rue des Lois", "allée Jean Jaurès", "rue de Metz", "place Dupuy", "avenue de Muret", "rue Riquet", "boulevard de Strasbourg", "rue Pargaminières"];
   let seed = tradeId.length * 97 + city.name.length * 13;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
@@ -378,7 +378,7 @@ function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false,
       lat: city.lat + (rnd() - 0.5) * 0.05,
       lng: city.lng + (rnd() - 0.5) * 0.07,
       mapsUrl: `https://www.google.com/maps/search/${encodeURIComponent(trade.singular + " " + city.name)}`,
-      socialUrl: presence === "reseaux" ? "https://www.facebook.com/" : undefined,
+      socialUrl: presence === "reseaux" ? (trade.art ? "https://www.instagram.com/" : "https://www.facebook.com/") : undefined,
       website: presence === "vieux" || presence === "equipe" ? "http://exemple-demo.fr" : undefined,
       photoCount: i % 3 === 0 ? 2 : 10,
       created: `${[1998, 2009, 2016, 2025, 2012, 2020][i % 6]}-0${(i % 9) + 1}-15`,

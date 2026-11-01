@@ -1,3 +1,4 @@
+import { ART_VENUES } from "./art";
 // Métiers ciblés + préréglages pour la génération des sites.
 // Chaque métier a plusieurs variantes de direction artistique :
 // deux entreprises du même métier n'obtiennent pas le même site.
@@ -18,6 +19,7 @@ export type Trade = {
   sections: string[];
   hookDetail: string; // argument d'appel spécifique au métier
   variants: SiteVariant[];
+  art?: boolean; // lieu à démarcher pour tes tableaux
 };
 
 export const TRADES: Trade[] = [
@@ -238,8 +240,14 @@ export const TRADES: Trade[] = [
   },
 ];
 
+// Lieux pour tes tableaux, au même format que les métiers (même scan, même pipeline)
+export const ART_TRADES: Trade[] = ART_VENUES.map((v) => ({
+  id: v.id, label: v.label, singular: v.singular, query: v.query, hookDetail: v.wall,
+  effect: { name: "", description: "" }, sections: [], variants: [], art: true,
+}));
+
 export function getTrade(id: string): Trade | undefined {
-  return TRADES.find((t) => t.id === id);
+  return TRADES.find((t) => t.id === id) || ART_TRADES.find((t) => t.id === id);
 }
 
 // Choix déterministe d'une variante à partir de l'identifiant Google de l'entreprise.

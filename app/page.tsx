@@ -1,7 +1,8 @@
 "use client";
 import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { TRADES, getTrade } from "../lib/trades";
+import { TRADES, ART_TRADES, getTrade } from "../lib/trades";
+import { artFit, isArt, priceText } from "../lib/art";
 import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } from "../lib/types";
 import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
@@ -33,7 +34,13 @@ function routeUrl(stops: Lead[]) {
 
 export default function Home() {
   const [view, setView] = useState<View>("scan");
-  const [tradeId, setTradeId] = usePersistent("filon.trade", "boulangerie");
+  const [mode, setMode] = usePersistent<"sites" | "tableaux">("filon.mode", "sites");
+  const [siteTrade, setSiteTrade] = usePersistent("filon.trade", "boulangerie");
+  const [artTrade, setArtTrade] = usePersistent("filon.artTrade", "art-japonais");
+  const tradeId = mode === "tableaux" ? artTrade : siteTrade;
+  const setTradeId = (id: string) => { if (isArt(id)) { setMode("tableaux"); setArtTrade(id); } else { setMode("sites"); setSiteTrade(id); } };
+  const LIST = mode === "tableaux" ? ART_TRADES : TRADES;
+  const [artKind, setArtKind] = useState<"all" | "fit" | "insta">("all");
   const [city, setCity] = usePersistent("filon.city", "Toulouse");
   const [deep, setDeep] = usePersistent("filon.deep", false);
   const [includeOld, setIncludeOld] = usePersistent("filon.old", true);
@@ -208,7 +215,7 @@ export default function Home() {
       const r = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld, includeAll, around: around.trim() || undefined, radius }),
+        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld: includeOld || isArt(t), includeAll: includeAll || isArt(t), around: around.trim() || undefined, radius }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -217,6 +224,7 @@ export default function Home() {
       enrichRegistry(j.leads as Lead[]);
       setResult(j);
       setKind("all");
+      setArtKind("all");
       setLeads((prev) => {
         const next = { ...prev };
         for (const l of j.leads as Lead[]) next[l.id] = l;
@@ -237,8 +245,14 @@ export default function Home() {
     return c;
   }, [result]);
 
+  const artMode = !!result && isArt(result.tradeId);
+  const fits = useMemo(() => Object.fromEntries((result?.leads || []).map((l) => [l.id, artFit(l)])), [result]);
   const shown = useMemo(() => {
     if (!result) return [];
+    if (isArt(result.tradeId))
+      return result.leads
+        .filter((l) => (l.rating || 0) >= minRating && (l.reviews || 0) >= minReviews && (artKind === "all" || (artKind === "fit" ? fits[l.id]?.universe : fits[l.id]?.insta)))
+        .sort((a, b) => (fits[b.id]?.score || 0) - (fits[a.id]?.score || 0));
     return result.leads.filter(
       (l) =>
         (l.rating || 0) >= minRating &&
@@ -246,7 +260,7 @@ export default function Home() {
         (kind === "all" || l.presence === kind) &&
         (!wpOnly || l.audit?.cms === "WordPress" || !l.website)
     );
-  }, [result, minRating, minReviews, kind, wpOnly]);
+  }, [result, minRating, minReviews, kind, wpOnly, artKind, fits]);
   const wpCount = useMemo(() => (result?.leads || []).filter((l) => l.audit?.cms === "WordPress").length, [result]);
 
   const updatePipeline = useCallback(
@@ -302,8 +316,8 @@ export default function Home() {
     ...([["scan", "Chercher des clients"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
       id: `v-${v}`, group: "Aller à", label, run: () => setView(v),
     })),
-    ...TRADES.map((t) => ({
-      id: `t-${t.id}`, group: "Chercher", label: `${t.label} à ${city || "…"}`, hint: "1 à 3 requêtes",
+    ...[...TRADES, ...ART_TRADES].map((t) => ({
+      id: `t-${t.id}`, group: t.art ? "Chercher des lieux pour tes tableaux" : "Chercher des clients", label: `${t.label} à ${city || "…"}`, hint: "1 à 3 requêtes",
       run: () => { setView("scan"); setTradeId(t.id); runScan(city, t.id); },
     })),
     ...Object.keys(pipeline).filter((id) => leads[id]).map((id) => ({
@@ -346,11 +360,15 @@ export default function Home() {
 
       {view === "scan" && (
         <main className="find">
+          <div className="mode" role="tablist" aria-label="Ce que tu prospectes">
+            <button role="tab" aria-selected={mode === "sites"} onClick={() => setMode("sites")}>Sites et print</button>
+            <button role="tab" aria-selected={mode === "tableaux"} onClick={() => setMode("tableaux")}>Tableaux</button>
+          </div>
           <form className="searchbar" onSubmit={(e) => { e.preventDefault(); runScan(); }}>
             <label className="sb-field">
-              <span>Métier</span>
+              <span>{mode === "tableaux" ? "Lieu" : "Métier"}</span>
               <select value={tradeId} onChange={(e) => setTradeId(e.target.value)}>
-                {TRADES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                {LIST.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
             </label>
             <label className="sb-field grow">
@@ -363,7 +381,7 @@ export default function Home() {
           </form>
 
           <div className="sb-under">
-            <div className="target" role="radiogroup" aria-label="Qui chercher">
+            {mode === "sites" && <div className="target" role="radiogroup" aria-label="Qui chercher">
               {([
                 ["sans", "Sans site"],
                 ["refaire", "+ sites à refaire"],
@@ -377,7 +395,7 @@ export default function Home() {
                   </button>
                 );
               })}
-            </div>
+            </div>}
             <details className="opts">
               <summary>Options{around.trim() || deep ? " ·" : ""}{around.trim() ? " quartier" : ""}{deep ? " ville entière" : ""}</summary>
               <div className="opts-body">
@@ -421,7 +439,7 @@ export default function Home() {
           {loading && (
             <section className="loading">
               <div className="steps">
-                {["Recherche sur Google", "Analyse des sites", "Repérage des besoins", "Presque prêt"].map((t, k) => (
+                {(mode === "tableaux" ? ["Recherche sur Google", "Repérage des lieux", "Univers et fréquentation", "Presque prêt"] : ["Recherche sur Google", "Analyse des sites", "Repérage des besoins", "Presque prêt"]).map((t, k) => (
                   <span key={t} className={k < step ? "done" : k === step ? "now" : ""}>{t}</span>
                 ))}
               </div>
@@ -431,16 +449,26 @@ export default function Home() {
 
           {!result && !loading && (
             <section className="empty-start">
-              <h1>Trouve tes prochains <span>clients</span>.</h1>
-              <p>Un métier, une ville. Filon repère qui a besoin de toi et te dit comment l'approcher.</p>
+              {mode === "tableaux" ? (
+                <>
+                  <h1>Mets tes tableaux sur les <span>bons murs</span>.</h1>
+                  <p>Un type de lieu, une ville. Filon repère ceux qui collent à ton univers, et te dit comment leur vendre une pièce.</p>
+                  {!profile.art?.priceFrom && <p className="hint">Pense à renseigner ton Instagram et tes prix dans Réglages › Tes tableaux : ils sont repris dans tes messages.</p>}
+                </>
+              ) : (
+                <>
+                  <h1>Trouve tes prochains <span>clients</span>.</h1>
+                  <p>Un métier, une ville. Filon repère qui a besoin de toi et te dit comment l'approcher.</p>
+                </>
+              )}
               <div className="quick-trades">
-                {["boulangerie", "coiffeur", "restaurant", "garage", "plombier", "avocat", "fleuriste", "beaute"].map((id) => (
+                {(mode === "tableaux" ? ART_TRADES.map((t) => t.id).slice(0, 9) : ["boulangerie", "coiffeur", "restaurant", "garage", "plombier", "avocat", "fleuriste", "beaute"]).map((id) => (
                   <button key={id} className={`qt ${tradeId === id ? "on" : ""}`} onClick={() => setTradeId(id)}>{getTrade(id)?.label}</button>
                 ))}
               </div>
               {recent.length > 0 && (
                 <div className="recent">
-                  {recent.map((r) => (
+                  {recent.filter((r) => isArt(r.tradeId) === (mode === "tableaux")).map((r) => (
                     <button key={r.city + r.tradeId} className="chip" onClick={() => { setCity(r.city); setTradeId(r.tradeId); runScan(r.city, r.tradeId); }} disabled={loading}>
                       {getTrade(r.tradeId)?.label} · {r.city}
                     </button>
@@ -454,6 +482,7 @@ export default function Home() {
             <section className="results">
               <div className="res-head">
                 <h1><b>{result.leads.length}</b> {trade.label.toLowerCase()} à {result.city.name}</h1>
+                {artMode && <p className="eyebrow">Lieux pour tes tableaux · vente directe{priceText(profile) ? ` · ${priceText(profile)}` : ""}</p>}
                 <p className="hint">
                   {result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées
                   {regProgress ? ` · ancienneté ${regProgress.done}/${regProgress.total}` : ""}
@@ -471,7 +500,10 @@ export default function Home() {
 
               <div className="res-bar">
                 <div className="segments" role="tablist" aria-label="Type de prospect">
-                  {(["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
+                  {artMode && ([["all", "Tous", result.leads.length], ["fit", "Univers proche", result.leads.filter((l) => fits[l.id]?.universe).length], ["insta", "Sur Instagram", result.leads.filter((l) => fits[l.id]?.insta).length]] as const).filter(([k, , n]) => k === "all" || n > 0).map(([k, label, n]) => (
+                    <button key={k} role="tab" aria-selected={artKind === k} className="seg" onClick={() => setArtKind(k)}>{label} <b>{n}</b></button>
+                  ))}
+                  {!artMode && (["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
                     <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)}>
                       {k === "all" ? "Tous" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
                     </button>
@@ -519,22 +551,24 @@ export default function Home() {
                         const isSel = selected.includes(l.id);
                         const rs = rowStatus(l);
                         const act = activity(l.created);
-                        const top = detectNeeds(l).find((n) => n.priority === 1 && !n.deadline) || detectNeeds(l).find((n) => !n.deadline && n.priority === 2);
+                        const fit = artMode ? fits[l.id] : null;
+                        const top = artMode ? null : detectNeeds(l).find((n) => n.priority === 1 && !n.deadline) || detectNeeds(l).find((n) => !n.deadline && n.priority === 2);
                         return (
                           <li key={l.id} className="row" data-active={openId === l.id} data-kind={l.presence}>
                             <label className="sel" title="Ajouter à la tournée" onClick={(e) => e.stopPropagation()}>
                               <input type="checkbox" checked={isSel} onChange={() => toggle(l.id)} aria-label={`Ajouter ${l.name} à la tournée`} />
                             </label>
                             <button className="row-main" onClick={() => setOpenId(l.id)}>
-                              <span className={`mono ${rs.tone}`} aria-hidden>{l.name.replace(/^(boulangerie|salon de coiffure|garage|restaurant|boucherie|fleuriste|institut)\s+(de la |du |des |de |d')?/i, "").slice(0, 1).toUpperCase()}</span>
+                              <span className={`mono ${fit ? (fit.universe ? "none" : fit.insta ? "social" : "ok") : rs.tone}`} aria-hidden>{l.name.replace(/^(boulangerie|salon de coiffure|salon de tatouage|garage|restaurant japonais|restaurant asiatique|restaurant|boucherie|fleuriste|institut|bar à jeux|bar|café|concept store|boutique de déco|boutique manga|galerie|barber shop|hôtel|disquaire)\s+(de la |du |des |de |d')?/i, "").slice(0, 1).toUpperCase()}</span>
                               <div className="row-text">
                                 <h3>{l.name}</h3>
                                 <div className="meta">
-                                  <span className={`pill ${rs.tone}`}>{rs.label}</span>
+                                  {fit ? <span className={`pill ${fit.universe ? "none" : fit.insta ? "social" : "ok"}`}>{fit.universe ? "Univers proche" : fit.insta ? "Instagram" : "À démarcher"}</span> : <span className={`pill ${rs.tone}`}>{rs.label}</span>}
                                   {l.rating ? <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span> : null}
                                   {act && <span>depuis {act.since}</span>}
                                 </div>
                                 {top && <div className="next">→ {top.title}</div>}
+                                {fit && fit.reasons.filter((x) => x !== "Univers proche du tien")[0] && <div className="next">→ {fit.reasons.filter((x) => x !== "Univers proche du tien")[0]}</div>}
                               </div>
                             </button>
                             <div className="side">
@@ -594,6 +628,30 @@ export default function Home() {
               <label className="field">Site<input value={profile.site} onChange={(e) => setProfile({ ...profile, site: e.target.value })} /></label>
               <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
             </div>
+          </details>
+
+          <details className="set-sec" open={mode === "tableaux"}>
+            <summary>Tes tableaux</summary>
+            <p className="hint">Repris dans tes messages Instagram, e-mails et scripts de visite. Vente directe aux lieux.</p>
+            {(() => {
+              const a = profile.art || {};
+              const set = (patch: Partial<NonNullable<Profile["art"]>>) => setProfile({ ...profile, art: { ...a, ...patch } });
+              const num = (v: string) => (v === "" ? undefined : Number(v));
+              return (
+                <>
+                  <div className="row2">
+                    <label className="field">Ton Instagram<input value={a.instagram || ""} placeholder="@tprod_creation" onChange={(e) => set({ instagram: e.target.value })} /></label>
+                    <label className="field">Ce que tu fais<input value={a.style || ""} placeholder="des tableaux sérigraphiés, univers manga et Japon" onChange={(e) => set({ style: e.target.value })} /></label>
+                    <label className="field">Prix à partir de (€)<input type="number" inputMode="numeric" min="0" step="10" value={a.priceFrom ?? ""} onChange={(e) => set({ priceFrom: num(e.target.value) })} /></label>
+                    <label className="field">Jusqu'à (€, facultatif)<input type="number" inputMode="numeric" min="0" step="10" value={a.priceTo ?? ""} onChange={(e) => set({ priceTo: num(e.target.value) })} /></label>
+                    <label className="field">Formats<input value={a.formats || ""} placeholder="30×40, 50×70 et 70×100 cm" onChange={(e) => set({ formats: e.target.value })} /></label>
+                  </div>
+                  <label className="field">Ce que tu offres en plus (un par ligne, seulement ce qui est vrai)
+                    <textarea value={a.extras || ""} placeholder={"Livraison offerte sur Toulouse\nAccrochage offert"} onChange={(e) => set({ extras: e.target.value })} />
+                  </label>
+                </>
+              );
+            })()}
           </details>
 
           <details className="set-sec">
