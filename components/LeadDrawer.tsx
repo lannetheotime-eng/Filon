@@ -186,6 +186,7 @@ export default function LeadDrawer({
                 {reportUrl && <a href={reportUrl} target="_blank" rel="noreferrer">Voir le rapport d'audit</a>}
                 {lead.socialUrl && <a href={lead.socialUrl} target="_blank" rel="noreferrer">Sa page sur les réseaux</a>}
                 <a href={`https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">Chercher sur Instagram</a>
+                {!art && <a href={`/ia?nom=${encodeURIComponent(lead.name)}&metier=${encodeURIComponent(trade.singular)}&ville=${encodeURIComponent(lead.city)}${lead.website ? `&site=${encodeURIComponent(lead.website)}` : ""}`} target="_blank" rel="noreferrer">Tester sa visibilité dans les IA</a>}
                 {lead.phone && <a href={`tel:${(lead.phoneIntl || lead.phone).replace(/\s/g, "")}`}>Appeler</a>}
                 {to && <span className="muted">E-mail : {to}</span>}
               </div>

@@ -96,3 +96,20 @@ lib/generators.ts         script, objections, e-mails, messages, prompt du site
 components/               carte, fiche entreprise, Kanban
 middleware.ts             protection par mot de passe
 ```
+
+## Cité : test de visibilité dans les IA (`/ia`)
+
+Page publique (sans mot de passe) : un commerçant tape son nom, son activité et sa ville ; Cité pose trois questions de client aux IA, avec recherche web, et montre s'il est cité, qui l'est à sa place, quels sites les IA ont lus, et quoi corriger. Rapport partageable par lien (`/ia/rapport?d=…`). Depuis une fiche Filon : menu « Plus » › « Tester sa visibilité dans les IA ».
+
+Sans clé, Cité tourne en démonstration (résultats fictifs, marqués « Démo »).
+
+| Variable | Rôle |
+| --- | --- |
+| `GEMINI_API_KEY` | Clé Gemini (Google AI Studio). Active les tests réels avec Gemini + recherche Google. |
+| `GEMINI_MODEL` | Facultatif, défaut `gemini-flash-latest`. |
+| `OPENAI_API_KEY` | Facultatif : ajoute ChatGPT (payant, environ 1 à 3 centimes par question). |
+| `OPENAI_MODEL` | Facultatif, défaut `gpt-4.1-mini`. |
+| `IA_DAILY_CAP` | Tests maximum par jour, défaut 50 (= 150 recherches). |
+| `NEXT_PUBLIC_CITE_CONTACT` | E-mail du bouton « Être accompagné » (sinon lien vers `NEXT_PUBLIC_CITE_SITE`). |
+| `NEXT_PUBLIC_CITE_SITE` | Défaut `https://thot-studio.fr`. |
+| `NEXT_PUBLIC_CITE_BRAND`, `NEXT_PUBLIC_CITE_OFFER` | Nom du studio et phrase d'offre affichés en bas du rapport. |
