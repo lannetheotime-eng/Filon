@@ -17,6 +17,14 @@ export function normalizePhone(raw: string) {
   return p;
 }
 
+// Remplace les caractères hors alphabet SMS standard : un seul accent comme « ê » fait passer
+// tout le message en Unicode, avec des segments de 70 caractères au lieu de 160.
+const MAP: Record<string, string> = { "ê": "e", "ë": "e", "â": "a", "î": "i", "ï": "i", "ô": "o", "û": "u", "ç": "c", "œ": "oe", "Œ": "OE", "Ê": "E", "Â": "A", "Î": "I", "Ô": "O", "Û": "U", "À": "A", "È": "E", "«": '"', "»": '"', "’": "'", "‘": "'", "“": '"', "”": '"', "·": "-", "–": "-", "—": "-", "…": "...", "\u00a0": " ", "\u202f": " " };
+const GSM = /^[@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&'()*+,\-./0-9:;<=>?¡A-ZÄÖÑÜ§¿a-zäöñüà]$/;
+export function toGsm(text: string) {
+  return [...text.replace(/«[\s\u00a0\u202f]*/g, '"').replace(/[\s\u00a0\u202f]*»/g, '"')].map((ch) => (GSM.test(ch) ? ch : MAP[ch] ?? (ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "?"))).join("").replace(/ {2,}/g, " ");
+}
+
 export async function sendSms(to: string, body: string): Promise<{ status: "sent" | "test" | "error"; error?: string }> {
   if (!smsLive()) return { status: "test" };
   try {
@@ -26,7 +34,7 @@ export async function sendSms(to: string, body: string): Promise<{ status: "sent
         Authorization: "Basic " + Buffer.from(`${SID}:${TOKEN}`).toString("base64"),
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: to, From: FROM, Body: body }).toString(),
+      body: new URLSearchParams({ To: to, From: FROM, Body: toGsm(body) }).toString(),
       cache: "no-store",
     });
     const j = await r.json().catch(() => ({}));

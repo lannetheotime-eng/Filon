@@ -175,33 +175,34 @@ export const npcPrompt = (n: Npc) => `${NPC_RULES}\n\nL'AFFAIRE : ${FACTS}\n\n${
 
 export const ACTS: { id: ActId; title: string; hint: string }[] = [
   { id: "invitation", title: "Invitations", hint: "À envoyer quelques jours avant : chacun découvre son personnage et son costume." },
-  { id: "acte1", title: "Acte 1 · Le drame", hint: "Au début de la soirée. Lancez le message du commissaire, chacun reçoit ses secrets. Tour de table : chacun se présente." },
-  { id: "acte2", title: "Acte 2 · Les langues se délient", hint: "Après 30 à 40 minutes. Chacun reçoit des indices sur les autres. Les témoins peuvent être appelés. Un témoin surprise se manifeste 15 minutes plus tard." },
-  { id: "acte3", title: "Acte 3 · Le rapport du labo", hint: "Après 30 à 40 minutes. Tout le monde reçoit le rapport du labo, puis vote sur sa page." },
-  { id: "revelation", title: "Révélation", hint: "Quand tout le monde a voté. Le commissaire révèle la vérité à voix haute." },
+  { id: "acte1", title: "Acte 1 · Le drame (15 min)", hint: "Top départ. Faites parler le commissaire, chacun lit son dossier secret (3 min), puis tour de table : chacun se présente et donne sa version." },
+  { id: "acte2", title: "Acte 2 · Les langues se délient (25 min)", hint: "Chacun reçoit deux indices sur les autres. Questions libres, alliances, appels aux témoins. Un témoin surprise se manifeste 10 minutes plus tard." },
+  { id: "acte3", title: "Acte 3 · Le rapport du labo (10 min)", hint: "Le commissaire lit le rapport du labo. Dernières accusations, puis chacun vote sur sa page." },
+  { id: "revelation", title: "Révélation (5 min)", hint: "Quand tout le monde a voté. Le commissaire révèle la vérité à voix haute." },
 ];
 
-export const SURPRISE_DELAY_MIN = 15;
+export const SURPRISE_DELAY_MIN = 10;
 
 export const COMMISSAIRE = {
   voice: "cedar",
   tone: "Vieux commissaire de police français, voix grave, lente, fatiguée, un peu ironique. Il marque des pauses, comme s'il fumait entre deux phrases.",
   acte1: "Mesdames, messieurs… Commissaire Garnier, police judiciaire de Toulouse. Ce soir, à vingt-trois heures quarante, Victor Armand a été retrouvé mort dans sa cave. Frappé à la tête. Vous étiez quatre, ce soir, autour de lui. Quatre à avoir une raison de lui en vouloir. Personne ne quitte cette pièce. Vous allez parler, chacun votre tour. Et je vous préviens : l'un d'entre vous ment pour couvrir un meurtre.",
   acte2: "C'est encore moi. Les langues commencent à se délier, et j'ai reçu des choses… intéressantes. Regardez vos téléphones. Et si j'étais vous, j'appellerais Inès, la plongeuse. C'est elle qui a trouvé le corps.",
-  acte3: "Le labo vient de rendre son rapport. La bouteille brisée près du corps est un faux. Quelqu'un truquait la cave de Victor depuis des années. Vous avez tout en main maintenant. Votez. Vous avez jusqu'à mon retour.",
+  acte3: "Le labo vient de rendre son rapport. La bouteille brisée près du corps est un faux Margaux 1990. L'étiquette a été imprimée sur l'imprimante du petit bureau de la cave… et seules deux clés ouvrent ce bureau. Victor est mort entre vingt-trois heures cinq et vingt-trois heures vingt. Vous avez dix minutes. Ensuite, vous votez.",
 };
 
+// SMS courts et sans caractères spéciaux : chaque segment de SMS est facturé
 export const SMS = {
   invitation: (c: Character, link: string) =>
-    `L'Armand · Samedi soir, un meurtre sera commis. Tu joues ${c.name}, ${c.role.toLowerCase()}. Costume : ${c.costume} Ton dossier : ${link}`,
+    `L'Armand, samedi soir : un meurtre sera commis. Tu joues ${c.name}, ${c.role.toLowerCase()}. Ton dossier et ton costume : ${link}`,
   acte1: (c: Character, link: string) =>
-    `ACTE 1 · Confidentiel. ${c.name}, voici ce que tu caches ce soir. Ne montre ce message à personne. Ton dossier complet : ${link}`,
+    `ACTE 1 - Confidentiel. ${c.name.split(" ")[0]}, ton dossier secret est ouvert. Ne le montre a personne : ${link}`,
   acte2: (c: Character, link: string) =>
-    `ACTE 2 · Pour toi seul, ${c.name.split(" ")[0]}. ${c.clues.map((k, i) => `${i + 1}) ${k.text}`).join(" ")} À toi de choisir à qui le révéler. Les témoins répondent au téléphone : ${link}`,
+    `ACTE 2 - Pour toi seul. ${c.clues.map((k, i) => `${i + 1}) ${k.text}`).join(" ")} Temoins : ${link}`,
   surprise: (link: string) =>
-    `Commissaire Garnier : le client de la table 12, M. Carrel, vient d'appeler. Il dit avoir vu des choses ce soir. Appelez-le : ${link}`,
+    `Commissaire Garnier : M. Carrel, client de la table 12, veut parler. Appelez-le : ${link}`,
   acte3: (link: string) =>
-    `ACTE 3 · Rapport du labo : la bouteille brisée est un faux Margaux 1990, étiquette imprimée au laser sur l'imprimante du bureau de la cave. Seules deux clés ouvrent ce bureau. Heure de la mort : entre 23 h 05 et 23 h 20. Votez : ${link}`,
+    `ACTE 3 - Le rapport du labo est dans ton dossier. Vote avant le retour du commissaire : ${link}`,
 };
 
 export const LAB_REPORT = [

@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "crypto";
 import { hasKV, kv, kvGetJSON, kvSetJSON } from "../kv";
-import { normalizePhone, sendSms, smsLive } from "./sms";
+import { normalizePhone, sendSms, smsLive, toGsm } from "./sms";
 import {
   ACTS, CHARACTERS, COMMISSAIRE, FACTS, LAB_REPORT, MOTIVES, NPCS, SMS, SOLUTION, SURPRISE_DELAY_MIN, TITLE, VENUE,
   charactersFor, npcsFor, type ActId, type CharId, type NpcId,
@@ -80,7 +80,7 @@ export const playerLink = (base: string, g: Game, p: Player) => `${base}/enquete
 
 async function text(g: Game, p: Player, kind: string, body: string) {
   const res = p.phone ? await sendSms(p.phone, body) : { status: "test" as const };
-  g.sms.push({ at: Date.now(), to: p.name, char: p.char, kind, body, ...res });
+  g.sms.push({ at: Date.now(), to: p.name, char: p.char, kind, body: toGsm(body), ...res });
 }
 
 export async function launchAct(g: Game, act: ActId, base: string) {

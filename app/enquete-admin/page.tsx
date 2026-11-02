@@ -48,7 +48,7 @@ export default function NewGame() {
   const count = rows.filter((r) => r.name.trim()).length;
   return (
     <main className="eq-wrap">
-      <p className="eq-kicker">Murder party · 3 ou 4 joueurs · 2 h environ</p>
+      <p className="eq-kicker">Murder party · 3 ou 4 joueurs · 1 h</p>
       <h1 className="eq-h1">La dernière bouteille</h1>
       <p className="eq-lead">Le chef d'un restaurant étoilé de Toulouse est retrouvé mort dans sa cave. Chaque joueur incarne un suspect et reçoit ses secrets par SMS. Des témoins joués par l'IA répondent au téléphone.</p>
       <p className="eq-muted">Si vous jouez aussi, laissez le personnage au hasard et ne lisez pas les SMS des autres dans le tableau de bord.</p>
