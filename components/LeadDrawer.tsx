@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Lead, PipelineEntry, Profile, Stage, Details, Dirigeant } from "../lib/types";
-import { STAGES } from "../lib/types";
+import { STAGES, MAIL_STATUS } from "../lib/types";
 import { getTrade } from "../lib/trades";
 import { visitScript, objections, emails, directMessages } from "../lib/generators";
 import { approachPlan, CHANNEL_LABEL } from "../lib/approach";
@@ -31,6 +31,10 @@ function Copy({ text, label = "Copier" }: { text: string; label?: string }) {
   );
 }
 
+// L'envoi depuis Filon est-il configuré ? (une seule question au serveur par session)
+let mailCheck: Promise<boolean> | null = null;
+const mailEnabled = () => (mailCheck ??= fetch("/api/mail/send").then((r) => r.json()).then((j) => !!j.enabled).catch(() => false));
+
 const plusDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
 export default function LeadDrawer({
@@ -53,6 +57,11 @@ export default function LeadDrawer({
   notify?: (m: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("plan");
+  const [canMail, setCanMail] = useState(false);
+  const [draft, setDraft] = useState<{ to: string; subject: string; body: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [mailErr, setMailErr] = useState("");
+  useEffect(() => { mailEnabled().then(setCanMail); }, []);
   const [details, setDetails] = useState<Details | null>(null);
   const [dirs, setDirs] = useState<Dirigeant[] | null>(null);
   const [busy, setBusy] = useState<"" | "avis" | "dir">("");
@@ -70,6 +79,8 @@ export default function LeadDrawer({
     setDirs(null);
     setErr("");
     setTab("plan");
+    setDraft(null);
+    setMailErr("");
     // Fiche ouverte sans date de création : on interroge le registre (gratuit)
     if (!lead.created && lead.registry !== "none" && !lead.id.startsWith("demo-")) loadDirigeant();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,6 +118,29 @@ export default function LeadDrawer({
       setErr(e.message || "Recherche impossible.");
     } finally {
       setBusy("");
+    }
+  }
+
+  async function sendDraft() {
+    if (!draft) return;
+    setSending(true);
+    setMailErr("");
+    try {
+      const r = await fetch("/api/mail/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      const at = new Date().toISOString();
+      onPipeline({
+        mails: [...(entry?.mails || []), { id: j.id, to: draft.to, subject: draft.subject, at, status: "sent" }],
+        stage: entry?.stage && entry.stage !== "a_contacter" ? entry.stage : "contacte",
+        channel: "email", contactedAt: at, followUp: entry?.followUp || plusDays(3),
+      });
+      notify(`E-mail envoyé à ${draft.to}`);
+      setDraft(null);
+    } catch (e: any) {
+      setMailErr(e.message || "Envoi impossible.");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -208,6 +242,20 @@ export default function LeadDrawer({
             <button className="chip" onClick={() => markContacted("email")}>E-mail</button>
             <button className="chip" onClick={() => markContacted("message")}>Message</button>
           </div>
+          {entry?.mails?.length ? (
+            <ul className="sent">
+              {[...entry.mails].reverse().map((m) => {
+                const st = MAIL_STATUS[m.status || "sent"] || MAIL_STATUS.sent;
+                return (
+                  <li key={m.id}>
+                    <span className={`mst ${st.tone}`}>{st.label}</span>
+                    <b>{m.subject}</b>
+                    <small>{new Date(m.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} · {m.to}</small>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
           {entry?.stage === "signe" && (
             <label className="field">
               Montant signé (€)
@@ -405,11 +453,26 @@ export default function LeadDrawer({
             {textTab === "emails" && (
               <>
                 {!to && <p className="hint" style={{ marginTop: 0 }}>Pas d'e-mail trouvé : cherche-le sur sa page ou demande-le lors de ta visite.</p>}
+                {!canMail && <p className="hint" style={{ marginTop: 0 }}>Pour envoyer depuis Filon et savoir si le mail est bien reçu, branche Resend (voir Réglages › Envoi des e-mails).</p>}
+                {draft && (
+                  <div className="compose">
+                    <label className="field">À<input type="email" value={draft.to} placeholder="contact@entreprise.fr" onChange={(e) => setDraft({ ...draft, to: e.target.value })} /></label>
+                    <label className="field">Objet<input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></label>
+                    <label className="field">Message<textarea rows={12} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} /></label>
+                    <p className="hint">Filon ajoute en bas : « Si vous ne souhaitez plus recevoir de message de ma part, répondez simplement « stop ». »</p>
+                    {mailErr && <p className="error">{mailErr}</p>}
+                    <div className="actions">
+                      <button className="btn small" disabled={sending || !draft.to.trim()} onClick={sendDraft}>{sending ? "Envoi…" : "Envoyer"}</button>
+                      <button className="btn ghost small" onClick={() => setDraft(null)}>Annuler</button>
+                    </div>
+                  </div>
+                )}
                 {mails.map((m, i) => (
                   <details className="block" key={m.label} open={i === 0}>
                     <summary className="bh">
                       <span><b>{m.label}</b> · {m.subject}</span>
                       <span style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                        {canMail && <button className="btn small" onClick={() => setDraft({ to: draft?.to || to, subject: m.subject, body: m.body })}>Envoyer</button>}
                         <Copy text={`${m.subject}\n\n${m.body}`} />
                         <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`}>Ouvrir</a>
                       </span>

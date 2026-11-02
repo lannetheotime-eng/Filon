@@ -58,8 +58,14 @@ export default function Today({
     .filter(({ n }) => (new Date(n.deadline + "T12:00:00").getTime() - now.getTime()) / 864e5 <= 21)
     .sort((a, b) => a.n.deadline!.localeCompare(b.n.deadline!));
 
+  // Signaux chauds : il a cliqué sur un lien de ton e-mail et n'est pas encore en rendez-vous
+  const hot = ids
+    .filter((id) => ["contacte", "a_relancer"].includes(pipeline[id].stage) && (pipeline[id].mails || []).some((m) => m.status === "clicked"))
+    .map((id) => ({ id, m: [...(pipeline[id].mails || [])].reverse().find((x) => x.status === "clicked")! }));
+  const bounced = ids.filter((id) => (pipeline[id].mails || []).slice(-1)[0]?.status === "bounced");
+
   const dayLabel = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const empty = !due.length && !visits.length && !writes.length && !deadlines.length && !nextTour;
+  const empty = !hot.length && !bounced.length && !due.length && !visits.length && !writes.length && !deadlines.length && !nextTour;
 
   return (
     <main className="today">
@@ -81,6 +87,27 @@ export default function Today({
       )}
 
       <div className="today-grid">
+        {hot.length > 0 && (
+          <section className="panel-b hot">
+            <div className="today-h"><h2>Ils ont cliqué <span>{hot.length}</span></h2></div>
+            <p className="hint" style={{ marginTop: 0 }}>Ils ont ouvert un lien de ton e-mail : c'est le moment de relancer ou de passer.</p>
+            <ul className="today-list">
+              {hot.map(({ id, m }) => (
+                <li key={id}><button onClick={() => onOpen(id)}><span className="slot">clic</span><span className="who"><b>{leads[id].name}</b><small>{m.subject}</small></span></button></li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {bounced.length > 0 && (
+          <section className="panel-b">
+            <div className="today-h"><h2>Adresse à corriger <span>{bounced.length}</span></h2></div>
+            <ul className="today-list">
+              {bounced.map((id) => (
+                <li key={id}><button onClick={() => onOpen(id)}><span className="slot late">rebond</span><span className="who"><b>{leads[id].name}</b><small>Ton e-mail n'est pas arrivé : trouve une autre adresse ou passe le voir.</small></span></button></li>
+              ))}
+            </ul>
+          </section>
+        )}
         {visits.length > 0 && (
           <section className="panel-b">
             <div className="today-h">

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { TRADES, ART_TRADES, getTrade } from "../lib/trades";
 import { artFit, isArt, priceText, seriesFor } from "../lib/art";
 import type { Lead, PipelineEntry, Profile, ScanResult, Stage, WebPresence } from "../lib/types";
-import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES } from "../lib/types";
+import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES, FINAL_MAIL } from "../lib/types";
 import { usePersistent, toCsv, download } from "../lib/store";
 import { mergeData, toSync, type SyncData } from "../lib/sync";
 import { detectNeeds, SERVICES, upcomingMoments } from "../lib/needs";
@@ -84,6 +84,43 @@ export default function Home() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Suivi des e-mails envoyés depuis Filon : statut mis à jour à l'ouverture (30 derniers jours)
+  const mailsChecked = useRef(false);
+  const [mailOn, setMailOn] = useState<{ enabled: boolean; from: string | null } | null>(null);
+  useEffect(() => { fetch("/api/mail/send").then((r) => r.json()).then(setMailOn).catch(() => setMailOn({ enabled: false, from: null })); }, []);
+  useEffect(() => {
+    if (!ready || mailsChecked.current) return;
+    mailsChecked.current = true;
+    const limit = new Date(Date.now() - 30 * 864e5).toISOString();
+    const todo = Object.entries(pipeline).flatMap(([lid, e]) => (e.mails || []).filter((m) => m.at > limit && !FINAL_MAIL.includes(m.status || "")).map((m) => ({ lid, id: m.id })));
+    if (!todo.length) return;
+    (async () => {
+      for (let i = 0; i < todo.length; i += 20) {
+        const chunk = todo.slice(i, i + 20);
+        const j = await fetch(`/api/mail/status?ids=${chunk.map((x) => x.id).join(",")}`).then((r) => r.json()).catch(() => null);
+        if (!j?.statuses) return;
+        const now = new Date().toISOString();
+        setPipeline((prev) => {
+          const next = { ...prev };
+          let hot = 0;
+          for (const { lid, id } of chunk) {
+            const st = j.statuses[id];
+            const e = next[lid];
+            if (!st || !e?.mails) continue;
+            const old = e.mails.find((m) => m.id === id)?.status;
+            if (old === st) continue;
+            if (st === "clicked") hot++;
+            const log = [...(e.log || []), { at: now, text: `E-mail : ${st === "clicked" ? "a cliqué sur un lien" : st === "delivered" ? "bien reçu" : st === "bounced" ? "adresse invalide" : st}` }].slice(-40);
+            next[lid] = { ...e, mails: e.mails.map((m) => (m.id === id ? { ...m, status: st, checkedAt: now } : m)), log, updatedAt: now };
+          }
+          if (hot) setTimeout(() => notify(`${hot} prospect${hot > 1 ? "s ont" : " a"} cliqué sur un lien de ton e-mail`), 0);
+          return next;
+        });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // Compte, mode et consommation
   useEffect(() => {
@@ -690,6 +727,23 @@ export default function Home() {
             <label className="field">Clients de référence (un par ligne, avec leur accord)
               <textarea value={profile.references || ""} onChange={(e) => setProfile({ ...profile, references: e.target.value })} placeholder={"Nom du client, ville"} />
             </label>
+          </details>
+
+          <details className="set-sec">
+            <summary>Envoi des e-mails</summary>
+            {mailOn?.enabled ? (
+              <p className="hint">Actif : tes e-mails partent de <b>{mailOn.from}</b>. Dans chaque fiche, onglet Textes › E-mails › « Envoyer depuis Filon ». Le statut (bien reçu, adresse invalide, clic sur un lien) se met à jour à chaque ouverture de Filon.</p>
+            ) : (
+              <>
+                <p className="hint">Envoie tes e-mails depuis Filon et sache s'ils sont bien arrivés. Gratuit jusqu'à 100 e-mails par jour avec Resend.</p>
+                <ol className="hint" style={{ paddingLeft: 18 }}>
+                  <li>Crée un compte sur resend.com et ajoute ton domaine (ex. thot-studio.fr) : copie les enregistrements DNS chez ton hébergeur.</li>
+                  <li>Dans le domaine, active le suivi des clics (« Click tracking ») et laisse le suivi des ouvertures désactivé.</li>
+                  <li>Crée une clé API, puis dans Vercel ajoute <b>RESEND_API_KEY</b> et <b>MAIL_FROM</b> (ex. Theo · Thot Studio &lt;theo@thot-studio.fr&gt;), et éventuellement <b>MAIL_REPLY_TO</b>. Relance le déploiement.</li>
+                </ol>
+              </>
+            )}
+            <p className="hint">Pas de suivi des ouvertures : depuis juillet 2026, la CNIL demande le consentement du destinataire pour les pixels de suivi, ce qu'un prospect n'a pas donné. Et Apple Mail fausse ces chiffres de toute façon. Le clic sur un lien (ton portfolio, ton rapport d'audit) est un signal bien plus fiable.</p>
           </details>
 
           <details className="set-sec">

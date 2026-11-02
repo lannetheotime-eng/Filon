@@ -90,7 +90,26 @@ export type PipelineEntry = {
   needs?: string[]; // besoins retenus pour la proposition
   log?: { at: string; text: string }[]; // historique des actions
   ticket?: number; // ce que rapporte un client au gérant (donné par lui)
+  mails?: SentMail[]; // e-mails envoyés depuis Filon
 };
+
+export type SentMail = { id: string; to: string; subject: string; at: string; status?: string; checkedAt?: string };
+
+// Statut renvoyé par Resend → libellé et couleur
+export const MAIL_STATUS: Record<string, { label: string; tone: "wait" | "ok" | "hot" | "bad" }> = {
+  queued: { label: "En cours d'envoi", tone: "wait" },
+  scheduled: { label: "Programmé", tone: "wait" },
+  sent: { label: "Envoyé", tone: "wait" },
+  delivery_delayed: { label: "Retardé", tone: "wait" },
+  delivered: { label: "Bien reçu", tone: "ok" },
+  opened: { label: "Bien reçu", tone: "ok" },
+  clicked: { label: "A cliqué sur un lien", tone: "hot" },
+  bounced: { label: "Adresse invalide", tone: "bad" },
+  complained: { label: "Signalé comme spam", tone: "bad" },
+  failed: { label: "Échec d'envoi", tone: "bad" },
+  canceled: { label: "Annulé", tone: "bad" },
+};
+export const FINAL_MAIL = ["clicked", "bounced", "complained", "failed", "canceled"];
 
 export type ScanResult = {
   city: { name: string; dept: string; lat: number; lng: number; zone?: string };
