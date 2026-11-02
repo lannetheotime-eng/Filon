@@ -9,9 +9,10 @@ import { encodeReport } from "../lib/report";
 import { detectNeeds, proposal } from "../lib/needs";
 import { liveProof, roi, closingLine, ticketQuestion, lines } from "../lib/pitch";
 import { siteStatus, activity } from "../lib/site";
+import AuditPanel from "./AuditPanel";
 import { isArt, artSteps, artScript, artMessages, artEmails, artObjections, instagramOf, seriesFor } from "../lib/art";
 
-type Tab = "plan" | "besoins" | "visite" | "emails" | "messages";
+type Tab = "plan" | "audit" | "besoins" | "visite" | "emails" | "messages";
 
 function Copy({ text, label = "Copier" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -46,6 +47,7 @@ export default function LeadDrawer({
   canSpend = () => true,
   onSpend = () => {},
   notify = () => {},
+  onLead = () => {},
 }: {
   lead: Lead;
   profile: Profile;
@@ -55,6 +57,7 @@ export default function LeadDrawer({
   canSpend?: (n: number) => boolean;
   onSpend?: (n: number) => void;
   notify?: (m: string) => void;
+  onLead?: (patch: Partial<Lead>) => void;
 }) {
   const [tab, setTab] = useState<Tab>("plan");
   const [canMail, setCanMail] = useState(false);
@@ -280,6 +283,7 @@ export default function LeadDrawer({
         <div className="subtabs" role="tablist">
           {((art ? [["plan", "Approche"], ["visite", "Textes"]] : [
             ["plan", "Approche"],
+            ["audit", lead.deep ? `Audit · ${lead.deep.health}` : "Audit"],
             ["besoins", `Offre${picked.length ? ` (${picked.length})` : ""}`],
             ["visite", "Textes"],
           ]) as [Tab, string][]).map(([id, label]) => (
@@ -358,7 +362,7 @@ export default function LeadDrawer({
             <h3 className="sec">Pour aller plus loin</h3>
             <details className="fold">
               <summary>{art ? "Pourquoi ce lieu" : "Ses points faibles et tes arguments"} ({plan.facts.length})</summary>
-              <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}</ul>
+              <ul className="facts-list">{plan.facts.map((f) => <li key={f}>{f}</li>)}{lead.deep?.checks.filter((c) => c.status === "fail").slice(0, 5).map((c) => <li key={c.id}>Audit : {c.title.charAt(0).toLowerCase() + c.title.slice(1)}{c.found ? ` (${c.found})` : ""}.</li>)}</ul>
             </details>
             <details className="fold">
               <summary>Objections probables ({objs.filter((o) => plan.likely.includes(o.id)).length})</summary>
@@ -396,6 +400,8 @@ export default function LeadDrawer({
             </details>
           </section>
         )}
+
+        {tab === "audit" && <AuditPanel lead={lead} trade={trade.singular} onLead={onLead} notify={notify} />}
 
         {tab === "besoins" && (
           <section className="needs">

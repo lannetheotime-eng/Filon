@@ -36,6 +36,38 @@ export default function Rapport() {
           <a href={r.u} target="_blank" rel="noreferrer">{host}</a>
         </header>
 
+        {r.x ? (
+          <>
+            <div className="report-score">
+              <div className="gauge-n" aria-label={`Santé du site : ${r.x.h} sur 100`}>
+                <strong>{r.x.h}</strong><span>/100</span>
+              </div>
+              <div>
+                <b>{r.x.h >= 80 ? "Site en bonne santé" : r.x.h >= 55 ? "Des points à améliorer" : "Le site freine vos clients"}</b>
+                <p>Santé globale du site (100 = parfait), mesurée sur {r.x.c.length} rubriques. {r.x.k.length} point{r.x.k.length > 1 ? "s" : ""} prioritaire{r.x.k.length > 1 ? "s" : ""} à corriger.</p>
+              </div>
+            </div>
+            <ul className="report-cats">
+              {r.x.c.map((c) => <li key={c.l} data-tone={c.s >= 80 ? "ok" : c.s >= 55 ? "mid" : "bad"}><span>{c.l}</span><i style={{ width: `${c.s}%` }} /><b>{c.s}</b></li>)}
+            </ul>
+            <h2>Ce qu'il faut corriger, par ordre d'importance</h2>
+            <ol className="report-issues">
+              {r.x.k.map((k) => (
+                <li key={k.t} data-s={k.s}>
+                  <h3>{k.t}</h3>
+                  <p>{k.w}</p>
+                  <p className="report-fix"><b>La solution :</b> {k.f}</p>
+                </li>
+              ))}
+            </ol>
+            {r.x.g.length > 0 && (
+              <>
+                <h2>Ce qui va bien</h2>
+                <ul className="report-good">{r.x.g.map((g) => <li key={g}>{g}</li>)}</ul>
+              </>
+            )}
+          </>
+        ) : (<>
         <div className="report-score">
           <div className="gauge-n" aria-label={`Score de ${r.s} sur 100`}>
             <strong>{r.s}</strong><span>/100</span>
@@ -65,9 +97,10 @@ export default function Rapport() {
             <ul className="report-good">{good.map((g) => <li key={g}>{g}</li>)}</ul>
           </>
         )}
+        </>)}
 
         <footer className="report-foot">
-          <p>Analyse automatique de la page d'accueil, réalisée {r.c ? `pour une entreprise de ${r.c} ` : ""}le {date}.</p>
+          <p>{r.x ? "Audit automatique (vitesse mesurée par Google PageSpeed, référencement, sécurité, obligations légales) de la page d'accueil, réalisé" : "Analyse automatique de la page d'accueil, réalisée"} {r.c ? `pour une entreprise de ${r.c} ` : ""}le {date}.</p>
           {(r.f.s || r.f.n) && (
             <div className="report-contact">
               <b>{[r.f.n, r.f.s].filter(Boolean).join(", ")}</b>

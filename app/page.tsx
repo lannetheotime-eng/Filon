@@ -827,6 +827,11 @@ export default function Home() {
       {openLead && (
         <LeadDrawer
           notify={notify}
+          onLead={(patch) => {
+            const id = openLead.id;
+            setLeads((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+            setResult((r) => (r ? { ...r, leads: r.leads.map((x) => (x.id === id ? { ...x, ...patch } : x)) } : r));
+          }}
           lead={openLead}
           profile={profile}
           entry={pipeline[openLead.id]}

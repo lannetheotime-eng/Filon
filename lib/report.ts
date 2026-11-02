@@ -11,6 +11,7 @@ export type ReportData = {
   h: boolean; // HTTPS
   d: string; // date de l'analyse
   f: { s: string; n: string; e: string; p: string; w: string }; // studio, prénom, e-mail, téléphone, site
+  x?: { h: number; c: { l: string; s: number }[]; k: { t: string; w: string; f: string; s: "fail" | "warn" }[]; g: string[] }; // audit complet
 };
 
 const toB64url = (s: string) => {
@@ -25,6 +26,18 @@ const fromB64url = (s: string) => {
 };
 
 export function encodeReport(l: Lead, p: Profile): string | null {
+  if (!l.audit && !l.deep) return null;
+  const x = l.deep
+    ? {
+        h: l.deep.health,
+        c: l.deep.cats.map((c) => ({ l: c.label, s: c.score })),
+        k: l.deep.checks.filter((c) => c.status === "fail" || c.status === "warn").sort((a, b) => b.impact - a.impact || (a.status === "fail" ? -1 : 1)).slice(0, 10).map((c) => ({ t: c.title, w: c.why, f: c.fix, s: c.status as "fail" | "warn" })),
+        g: l.deep.checks.filter((c) => c.status === "ok").map((c) => c.title).slice(0, 8),
+      }
+    : undefined;
+  if (!l.audit && x) {
+    return toB64url(JSON.stringify({ n: l.name, c: l.city, u: l.deep!.finalUrl, s: 100 - x.h, i: [], m: true, h: l.deep!.finalUrl.startsWith("https"), d: l.deep!.at.slice(0, 10), f: { s: p.studio, n: p.firstName, e: p.email, p: p.phone, w: p.site }, x }));
+  }
   if (!l.audit) return null;
   const data: ReportData = {
     n: l.name,
@@ -36,7 +49,9 @@ export function encodeReport(l: Lead, p: Profile): string | null {
     h: l.audit.https,
     d: (l.foundAt || new Date().toISOString()).slice(0, 10),
     f: { s: p.studio, n: p.firstName, e: p.email, p: p.phone, w: p.site },
+    x,
   };
+  if (x) data.d = l.deep!.at.slice(0, 10);
   return toB64url(JSON.stringify(data));
 }
 
