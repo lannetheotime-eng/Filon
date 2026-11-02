@@ -971,3 +971,9 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 .compose textarea { min-height: 220px; font-family: inherit; }
 .panel-b.hot { border-color: rgba(21,77,255,.6); box-shadow: 0 0 40px -14px rgba(21,77,255,.9); }
 .block .bh .btn { white-space: nowrap; border-radius: 999px; }
+.by-name-chip { border-radius: 999px; }
+.by-name-chip.on { background: var(--mark-soft); border-color: rgba(21,77,255,.6); color: var(--ink); }
+@media (max-width: 900px) {
+  .searchbar.by-name .sb-field:first-child { flex-basis: 100%; }
+  .searchbar.by-name .sb-field:not(:first-child) { border-top: 1px solid var(--line); border-radius: 16px; }
+}

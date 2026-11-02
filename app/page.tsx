@@ -47,6 +47,8 @@ export default function Home() {
   const [includeAll, setIncludeAll] = usePersistent("filon.all", false);
   const [wpOnly, setWpOnly] = useState(false);
   const [around, setAround] = useState("");
+  const [byName, setByName] = useState(false);
+  const [bizName, setBizName] = useState("");
   const [radius, setRadius] = usePersistent("filon.radius", 1000);
   // Mode simple (sans base) : compteur de requêtes tenu par ce navigateur, par mois
   const [localUsage, setLocalUsage] = usePersistent<{ month: string; calls: number; day: string; today: number }>("filon.usage", { month: "", calls: 0, day: "", today: 0 });
@@ -198,7 +200,7 @@ export default function Home() {
   const todayKey = new Date().toISOString().slice(0, 10);
   const usedToday = localUsage.day === todayKey ? localUsage.today : 0;
   const cap = profile.dailyCap ?? 30;
-  const scanCost = deep && !around.trim() ? 27 : 3;
+  const scanCost = byName ? 1 : deep && !around.trim() ? 27 : 3;
   const live = !!me?.google;
 
   function spend(n: number) {
@@ -252,7 +254,7 @@ export default function Home() {
       const r = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city: c, tradeId: t, deep, includeOld: includeOld || isArt(t), includeAll: includeAll || isArt(t), around: around.trim() || undefined, radius }),
+        body: JSON.stringify({ name: byName ? bizName.trim() : undefined, city: c, tradeId: t, deep, includeOld: includeOld || isArt(t), includeAll: includeAll || isArt(t), around: around.trim() || undefined, radius }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -267,7 +269,7 @@ export default function Home() {
         for (const l of j.leads as Lead[]) next[l.id] = l;
         return next;
       });
-      setRecent((prev) => [{ city: j.city.name, tradeId: t, at: new Date().toISOString() }, ...prev.filter((x) => !(x.city === j.city.name && x.tradeId === t))].slice(0, 6));
+      if (!(byName && bizName.trim())) setRecent((prev) => [{ city: j.city.name, tradeId: t, at: new Date().toISOString() }, ...prev.filter((x) => !(x.city === j.city.name && x.tradeId === t))].slice(0, 6));
     } catch (e: any) {
       setError(e.message || "Le scan a échoué.");
     } finally {
@@ -364,6 +366,7 @@ export default function Home() {
     ...(result?.leads || []).filter((l) => !pipeline[l.id]).map((l) => ({
       id: `r-${l.id}`, group: "Dernière recherche", label: l.name, hint: rowStatus(l).label, run: () => { setView("scan"); setOpenId(l.id); },
     })),
+    { id: "a-name", group: "Actions", label: "Chercher une entreprise précise par son nom", hint: "1 requête", run: () => { setView("scan"); setByName(true); } },
     { id: "a-save", group: "Actions", label: "Télécharger une sauvegarde", run: exportAll },
     { id: "a-prices", group: "Actions", label: "Régler mes tarifs", run: () => setView("reglages") },
   ];
@@ -401,7 +404,13 @@ export default function Home() {
             <button role="tab" aria-selected={mode === "sites"} onClick={() => setMode("sites")}>Sites et print</button>
             <button role="tab" aria-selected={mode === "tableaux"} onClick={() => setMode("tableaux")}>Tableaux</button>
           </div>
-          <form className="searchbar" onSubmit={(e) => { e.preventDefault(); runScan(); }}>
+          <form className={`searchbar ${byName ? "by-name" : ""}`} onSubmit={(e) => { e.preventDefault(); runScan(); }}>
+            {byName && (
+              <label className="sb-field grow">
+                <span>Nom de l'entreprise</span>
+                <input value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="ex. Cabinet VPA" autoFocus />
+              </label>
+            )}
             <label className="sb-field">
               <span>{mode === "tableaux" ? "Lieu" : "Métier"}</span>
               <select value={tradeId} onChange={(e) => setTradeId(e.target.value)}>
@@ -412,13 +421,16 @@ export default function Home() {
               <span>Ville</span>
               <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ville ou code postal" />
             </label>
-            <button className="btn sb-go" type="submit" disabled={loading || !city.trim()}>
+            <button className="btn sb-go" type="submit" disabled={loading || !city.trim() || (byName && !bizName.trim())}>
               {loading ? "Recherche…" : "Chercher"}
             </button>
           </form>
 
           <div className="sb-under">
-            {mode === "sites" && <div className="target" role="radiogroup" aria-label="Qui chercher">
+            <button type="button" className={`chip by-name-chip ${byName ? "on" : ""}`} onClick={() => setByName((v) => !v)} aria-pressed={byName}>
+              {byName ? "← Recherche par métier" : "Une entreprise précise"}
+            </button>
+            {mode === "sites" && !byName && <div className="target" role="radiogroup" aria-label="Qui chercher">
               {([
                 ["sans", "Sans site"],
                 ["refaire", "+ sites à refaire"],
@@ -433,7 +445,7 @@ export default function Home() {
                 );
               })}
             </div>}
-            <details className="opts">
+            {!byName && <details className="opts">
               <summary>Options{around.trim() || deep ? " ·" : ""}{around.trim() ? " quartier" : ""}{deep ? " ville entière" : ""}</summary>
               <div className="opts-body">
                 <label className="field">Autour d'une adresse (facultatif)
@@ -450,8 +462,8 @@ export default function Home() {
                   Toute la ville (jusqu'à 27 requêtes)
                 </label>
               </div>
-            </details>
-            {live && <span className="cost">{scanCost <= 3 ? "1 à 3" : `jusqu'à ${scanCost}`} requêtes · {me?.mode === "comptes" && me.usage ? `${me.usage.today}/${me.usage.dailyLimit} aujourd'hui` : `${Math.max(0, cap - usedToday)} restantes aujourd'hui`}</span>}
+            </details>}
+            {live && <span className="cost">{scanCost === 1 ? "1 requête" : scanCost <= 3 ? "1 à 3 requêtes" : `jusqu'à ${scanCost} requêtes`} · {me?.mode === "comptes" && me.usage ? `${me.usage.today}/${me.usage.dailyLimit} aujourd'hui` : `${Math.max(0, cap - usedToday)} restantes aujourd'hui`}</span>}
           </div>
           {error && <p className="error find-err">{error}</p>}
 
@@ -518,7 +530,7 @@ export default function Home() {
           {result && !loading && (
             <section className="results">
               <div className="res-head">
-                <h1><b>{result.leads.length}</b> {trade.label.toLowerCase()} à {result.city.name}</h1>
+                <h1><b>{result.leads.length}</b> {result.city.zone?.startsWith("Recherche") ? `résultat${result.leads.length > 1 ? "s" : ""} à ${result.city.name}` : `${trade.label.toLowerCase()} à ${result.city.name}`}</h1>
                 {artMode && <p className="eyebrow">Lieux pour tes tableaux · vente directe{priceText(profile) ? ` · ${priceText(profile)}` : ""}</p>}
                 <p className="hint">
                   {result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées

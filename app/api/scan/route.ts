@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { scan } from "../../../lib/scan";
+import { scan, findByName } from "../../../lib/scan";
 import { accountsEnabled, getSession } from "../../../lib/auth";
 import { assertBudget, record, usage } from "../../../lib/quota";
 
@@ -8,10 +8,16 @@ export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    const { city, tradeId, deep, includeOld, includeAll, around, radius } = await req.json();
+    const { city, tradeId, deep, includeOld, includeAll, around, radius, name } = await req.json();
     if (!city || !tradeId) return NextResponse.json({ error: "Indique une ville et un métier." }, { status: 400 });
     const s = accountsEnabled() ? await getSession(req) : null;
     const live = !!process.env.GOOGLE_PLACES_API_KEY;
+    if (name && String(name).trim()) {
+      if (live) await assertBudget(s, 1);
+      const found = await findByName(String(name).trim().slice(0, 100), String(city), String(tradeId));
+      if (live) await record(s, found.calls);
+      return NextResponse.json({ ...found, usage: await usage(s).catch(() => null) });
+    }
     if (live) await assertBudget(s, deep && !around ? 27 : 3);
     const result = await scan(String(city), String(tradeId), Boolean(deep), Boolean(includeOld), Boolean(includeAll), around ? { address: String(around), radius: Number(radius) || 1000 } : undefined);
     if (live) await record(s, result.calls);

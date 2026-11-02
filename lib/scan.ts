@@ -324,6 +324,50 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
   return { city, tradeId, leads, scanned: leads.length + withSite, withSite, audited, calls, demo: false };
 }
 
+// Recherche d'une entreprise précise par son nom (1 requête), quel que soit l'état de son site
+export async function findByName(name: string, cityQuery: string, tradeId: string): Promise<ScanResult> {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  let commune: Commune;
+  try { commune = await geocodeCity(cityQuery); } catch (e) {
+    if (key) throw e;
+    commune = { nom: cityQuery.trim(), codeDepartement: "31", centre: { coordinates: [1.444, 43.6045] } };
+  }
+  const [lng, lat] = commune.centre.coordinates;
+  const city = { name: commune.nom, dept: commune.codeDepartement, lat, lng, zone: `Recherche : « ${name} »` };
+  if (!key) {
+    const d = demoScan(city, tradeId, true, true);
+    const one = { ...d.leads[1], id: `demo-${tradeId}-nom`, name };
+    return { ...d, leads: [one], scanned: 1, withSite: 0 };
+  }
+  const res = await fetch(PLACES_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": FIELDS },
+    body: JSON.stringify({ textQuery: `${name} ${commune.nom}`, languageCode: "fr", regionCode: "FR", pageSize: 5, locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: 30000 } } }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Google Places a refusé la requête (${res.status}). ${(await res.text()).slice(0, 300)}`);
+  const places: any[] = ((await res.json()).places || []).filter((p: any) => !p.businessStatus || p.businessStatus === "OPERATIONAL");
+  const now = new Date().toISOString();
+  const sites = places.map((p) => p.websiteUri).filter((u) => u && classify(u).presence === "site");
+  const audits = sites.length ? await auditMany(sites, 20_000) : new Map();
+  const leads: Lead[] = places.map((p) => {
+    const c = classify(p.websiteUri);
+    const a = c.presence === "site" ? audits.get(p.websiteUri) : undefined;
+    const presence: WebPresence = c.presence === "site" ? (a && a.score >= 30 ? "vieux" : "equipe") : (c.presence as WebPresence);
+    const base = { phone: p.nationalPhoneNumber, rating: p.rating, reviews: p.userRatingCount, presence };
+    return {
+      id: p.id, name: p.displayName?.text || "Sans nom", tradeId, city: commune.nom, address: p.formattedAddress || "",
+      phoneIntl: p.internationalPhoneNumber, lat: p.location.latitude, lng: p.location.longitude, mapsUrl: p.googleMapsUri,
+      category: p.primaryTypeDisplayName?.text, hours: p.regularOpeningHours?.weekdayDescriptions, openPeriods: toPeriods(p.regularOpeningHours),
+      photoCount: Array.isArray(p.photos) ? p.photos.length : 0, score: scoreLead(base), foundAt: now,
+      socialUrl: c.presence === "reseaux" ? c.social : undefined,
+      website: c.presence === "site" ? p.websiteUri : undefined, audit: a,
+      ...base,
+    };
+  });
+  return { city, tradeId, leads, scanned: leads.length, withSite: 0, audited: audits.size, calls: 1, demo: false };
+}
+
 // Détails à la demande : avis clients à citer pendant l'approche.
 export async function placeDetails(id: string): Promise<Details> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
