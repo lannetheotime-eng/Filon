@@ -1,0 +1,108 @@
+/* Strates : une carotte géologique. Le plus récent en haut, le plus ancien au fond. Les couleurs viennent des marques fouillées. */
+.st {
+  --s-ground: #0e0d0c; --s-bed: #171513; --s-raise: #211e1b; --s-line: #2e2a26;
+  --s-ink: #f1ede6; --s-ink2: #b3aca2; --s-ink3: #7a7369;
+  --s-ochre: #e0a63a; --s-tray: #f6f4f0; --s-bad: #ff7b6b;
+  --f-display: "Instrument Serif", "Times New Roman", serif;
+  --f-body: "DM Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  min-height: 100vh; background: var(--s-ground); color: var(--s-ink); font-family: var(--f-body); color-scheme: dark;
+}
+.st-main { max-width: 920px; margin: 0 auto; padding: 0 max(18px, env(safe-area-inset-right, 0px)) 80px max(18px, env(safe-area-inset-left, 0px)); }
+
+.st-top { display: flex; align-items: baseline; gap: 12px; padding: 22px 0; }
+.st-logo { font: italic 30px/1 var(--f-display); color: var(--s-ink); text-decoration: none; letter-spacing: -0.01em; }
+.st-top span { font: 500 11px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink3); }
+
+.st-hero { padding: 36px 0 28px; }
+.st-hero h1 { font: 400 clamp(40px, 7.4vw, 84px)/0.98 var(--f-display); letter-spacing: -0.02em; margin: 0 0 20px; text-wrap: balance; max-width: 13ch; }
+.st-hero h1 em { color: var(--s-ochre); }
+.st-hero > p { font-size: 17px; line-height: 1.55; color: var(--s-ink2); max-width: 54ch; margin: 0 0 28px; }
+
+.st-form { display: grid; gap: 8px; max-width: 560px; }
+.st-form label { font: 500 11px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ochre); }
+.st-form > div { display: flex; gap: 6px; padding: 6px; border: 1px solid var(--s-line); border-radius: 14px; background: var(--s-bed); }
+.st-form > div:focus-within { border-color: var(--s-ochre); }
+.st-form input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--s-ink); font: 500 18px var(--f-mono); padding: 10px 12px; }
+.st-form input::placeholder { color: var(--s-ink3); }
+.st-form button { border: 0; border-radius: 10px; padding: 0 22px; background: var(--s-ochre); color: #1a1205; font: 700 15px var(--f-body); cursor: pointer; }
+.st-form button:disabled { opacity: .5; cursor: default; }
+.st-form button:focus-visible, .st-ex button:focus-visible, .st-sw:focus-visible, .st-years a:focus-visible { outline: 2px solid var(--s-ochre); outline-offset: 2px; }
+
+.st-ex { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 16px 0 0; font-size: 13px; color: var(--s-ink3); }
+.st-ex button { border: 1px solid var(--s-line); background: transparent; color: var(--s-ink2); border-radius: 999px; padding: 6px 12px; font: 500 12.5px var(--f-mono); cursor: pointer; }
+.st-ex button:hover:not(:disabled) { border-color: var(--s-ink3); color: var(--s-ink); }
+
+/* Fouille en cours : la carotte se remplit */
+.st-digging { display: grid; justify-items: start; gap: 10px; padding: 34px 0; }
+.st-core { display: grid; gap: 4px; width: 100%; max-width: 420px; }
+.st-core i { display: block; height: 14px; border-radius: 3px; background: var(--s-raise); animation: st-sed 2.4s ease-in-out infinite; }
+.st-core i:nth-child(2n) { height: 9px; }
+.st-core i:nth-child(3n) { height: 20px; }
+@keyframes st-sed { 0%, 100% { background: var(--s-raise); } 50% { background: #4a3a22; } }
+.st-digging p { font: italic 26px var(--f-display); margin: 6px 0 0; }
+.st-digging small { font: 12px var(--f-mono); color: var(--s-ink3); }
+.st-error { color: var(--s-bad); font-size: 15px; padding: 18px 0; }
+
+/* Résultat */
+.st-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 13px var(--f-mono); color: var(--s-ink2); padding: 22px 0; border-top: 1px solid var(--s-line); margin: 18px 0 0; }
+.st-summary b { color: var(--s-ink); font-weight: 500; }
+
+.st-column { display: grid; gap: 0; }
+.st-layer { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 16px; }
+.st-depth { position: relative; padding-top: 26px; border-right: 1px dashed var(--s-line); display: grid; align-content: start; gap: 4px; text-align: right; padding-right: 14px; }
+.st-depth span { font: 500 15px var(--f-mono); font-variant-numeric: tabular-nums; }
+.st-depth em { font: 11px var(--f-mono); font-style: normal; color: var(--s-ink3); }
+.st-depth::after { content: ""; position: absolute; right: -5px; top: 31px; width: 9px; height: 9px; border-radius: 50%; background: var(--s-ochre); }
+
+.st-bed { display: grid; grid-template-columns: 12px minmax(0, 1fr); margin: 6px 0; background: var(--s-bed); border-radius: 4px; overflow: hidden;
+  background-image: repeating-linear-gradient(176deg, transparent 0 22px, rgba(255,255,255,.018) 22px 23px); }
+.st-sediment { display: grid; }
+.st-sediment i { display: block; min-height: 18px; }
+.st-body { display: grid; gap: 18px; padding: 22px 22px 24px; min-width: 0; }
+.st-tag { font: 500 11px var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--s-ochre); margin: 0 0 4px; }
+.st-body h2 { font: 400 clamp(30px, 5vw, 44px)/1 var(--f-display); margin: 0; font-variant-numeric: tabular-nums; }
+.st-title { margin: 8px 0 0; font-size: 13.5px; color: var(--s-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Le plateau à échantillons : fond clair, car les logos sont dessinés pour du blanc */
+.st-tray { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 6; max-width: 100%; background: var(--s-tray); border-radius: 3px; padding: 18px; }
+.st-tray img { max-width: 78%; max-height: 100%; object-fit: contain; }
+.st-tray[data-broken] img { display: none; }
+.st-tray-empty { font: 12px var(--f-mono); color: #8a8378; }
+.st-tray:has(img):not([data-broken]) .st-tray-empty { display: none; }
+.st-tray small { position: absolute; right: 10px; bottom: 8px; font: 10.5px var(--f-mono); color: #8a8378; }
+
+.st-row { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.st-row h3 { font: 500 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--s-ink3); margin: 0; }
+.st-sws { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-sw { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1px solid var(--s-line); border-radius: 6px; background: var(--s-raise); color: var(--s-ink2); font: 12px var(--f-mono); cursor: pointer; }
+.st-sw i { width: 22px; height: 22px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.st-fonts { margin: 0; font-size: 15px; color: var(--s-ink); }
+.st-years { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.st-years a { font: 13px var(--f-mono); color: var(--s-ink2); text-decoration: underline; text-decoration-color: var(--s-line); text-underline-offset: 3px; }
+.st-years a:hover { color: var(--s-ochre); text-decoration-color: currentColor; }
+
+.st-bedrock { margin-left: 100px; padding: 14px 18px; font: 12px var(--f-mono); color: var(--s-ink3); letter-spacing: .08em; text-transform: uppercase;
+  background: repeating-linear-gradient(135deg, var(--s-bed) 0 8px, var(--s-ground) 8px 16px); border-radius: 4px; margin-top: 6px; }
+
+.st-lost { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--s-line); }
+.st-lost h2 { font: italic 400 clamp(30px, 5vw, 46px)/1.05 var(--f-display); margin: 0 0 10px; text-wrap: balance; }
+.st-lost > p { color: var(--s-ink2); max-width: 56ch; margin: 0 0 22px; line-height: 1.5; }
+.st-lost > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.st-lost figure { margin: 0; display: grid; gap: 8px; }
+.st-lost figure i { display: block; aspect-ratio: 4 / 3; border-radius: 4px; max-width: 100%; }
+.st-lost figcaption { display: grid; font: 12px var(--f-mono); color: var(--s-ink3); }
+.st-lost figcaption b { color: var(--s-ink); font-weight: 500; font-size: 13px; }
+
+.st-foot { margin-top: 64px; font-size: 12.5px; line-height: 1.6; color: var(--s-ink3); max-width: 70ch; }
+
+@media (max-width: 560px) {
+  .st-layer { grid-template-columns: 1fr; gap: 0; }
+  .st-depth { border-right: 0; padding: 18px 0 4px; text-align: left; display: flex; gap: 10px; align-items: baseline; }
+  .st-depth::after { display: none; }
+  .st-row { grid-template-columns: 1fr; gap: 8px; }
+  .st-bedrock { margin-left: 0; }
+  .st-body { padding: 18px 16px 20px; }
+  .st-tray { aspect-ratio: 16 / 8; }
+}
+@media (prefers-reduced-motion: reduce) { .st-core i { animation: none; background: #3a2f1f; } }
