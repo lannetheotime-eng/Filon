@@ -46,6 +46,9 @@ export type Lead = {
   created?: string; // date de création (registre officiel des entreprises)
   legalName?: string; // nom officiel trouvé dans le registre, pour vérifier la correspondance
   registry?: "ok" | "none"; // recherche dans le registre faite
+  email?: string; // e-mail de contact (trouvé sur son site ou saisi à la main)
+  emailOthers?: string[]; // autres adresses trouvées
+  emailChecked?: boolean; // recherche automatique déjà faite
   deep?: import("./deep-types").DeepAudit; // audit complet, lancé depuis la fiche
   score: number;
   foundAt: string;

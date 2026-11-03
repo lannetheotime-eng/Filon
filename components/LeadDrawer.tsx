@@ -38,10 +38,9 @@ const mailEnabled = () => (mailCheck ??= fetch("/api/mail/send").then((r) => r.j
 
 // Ouvre le brouillon dans Gmail (compte choisi dans Réglages), sinon dans l'application mail par défaut
 function composeUrl(gmail: string | undefined, to: string, subject: string, body: string) {
-  if (!gmail?.trim()) return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   if (/iPhone|iPad|iPod/i.test(ua)) return `googlegmail:///co?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  return `https://mail.google.com/mail/?view=cm&fs=1&authuser=${encodeURIComponent(gmail.trim())}&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return `https://mail.google.com/mail/?view=cm&fs=1${gmail?.trim() ? `&authuser=${encodeURIComponent(gmail.trim())}` : ""}&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 const plusDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
@@ -94,6 +93,13 @@ export default function LeadDrawer({
     setMailErr("");
     // Fiche ouverte sans date de création : on interroge le registre (gratuit)
     if (!lead.created && lead.registry !== "none" && !lead.id.startsWith("demo-")) loadDirigeant();
+    // E-mail : recherche automatique sur son site (accueil, contact, mentions légales), gratuite
+    if (!lead.email && !lead.audit?.email && !lead.emailChecked && lead.website && !lead.id.startsWith("demo-")) {
+      fetch(`/api/email?site=${encodeURIComponent(lead.website)}`).then((r) => r.json()).then((j) => {
+        onLead(j.email ? { email: j.email, emailOthers: j.others, emailChecked: true } : { emailChecked: true });
+        if (j.email) notify(`E-mail trouvé : ${j.email}`);
+      }).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
@@ -188,7 +194,7 @@ export default function LeadDrawer({
     const next = chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key];
     onPipeline({ needs: next });
   }
-  const to = lead.audit?.email || "";
+  const to = lead.email || lead.audit?.email || "";
 
   const st = siteStatus(lead);
   const act = activity(created);
@@ -221,7 +227,7 @@ export default function LeadDrawer({
           <div className="d-actions">
             <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lead.address)}`} target="_blank" rel="noreferrer">Itinéraire</a>
             {art && <a className="btn ghost small" href={insta || `https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">{insta ? "Son Instagram" : "Chercher sur Instagram"}</a>}
-            <a className="btn ghost small" href={composeUrl(profile.gmail, to, mails[0].subject, mails[0].body)} target={profile.gmail ? "_blank" : undefined} rel="noreferrer">{profile.gmail ? "Gmail" : "E-mail"}</a>
+            <a className="btn ghost small" href={composeUrl(profile.gmail, to, mails[0].subject, mails[0].body)} target="_blank" rel="noreferrer">Gmail</a>
             {reportUrl && <Copy text={reportUrl} label="Lien du rapport d'audit" />}
             <details className="more">
               <summary className="btn ghost small">Plus</summary>
@@ -466,7 +472,11 @@ export default function LeadDrawer({
 
             {textTab === "emails" && (
               <>
-                {!to && <p className="hint" style={{ marginTop: 0 }}>Pas d'e-mail trouvé : cherche-le sur sa page ou demande-le lors de ta visite.</p>}
+                <label className="field mail-to">À
+                  <input type="email" value={to} placeholder={lead.website && !lead.emailChecked ? "Recherche de son e-mail sur son site…" : "contact@entreprise.fr"} onChange={(e) => onLead({ email: e.target.value.trim() })} />
+                </label>
+                {lead.emailOthers?.length ? <p className="hint" style={{ marginTop: -4 }}>Autres adresses trouvées : {lead.emailOthers.map((e) => <button key={e} className="chip" style={{ marginRight: 4 }} onClick={() => onLead({ email: e })}>{e}</button>)}</p> : null}
+                {!to && <p className="hint" style={{ marginTop: 0 }}>{lead.website ? "Pas d'e-mail public sur son site : regarde sa fiche Google ou sa page Facebook, puis colle-le ici." : "Pas de site, donc pas d'e-mail public : regarde sa page Facebook ou demande-le lors de ta visite, puis colle-le ici."}</p>}
                 {!canMail && <p className="hint" style={{ marginTop: 0 }}>Pour envoyer depuis Filon et savoir si le mail est bien reçu, branche Resend (voir Réglages › Envoi des e-mails).</p>}
                 {draft && (
                   <div className="compose">
@@ -488,7 +498,7 @@ export default function LeadDrawer({
                       <span style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
                         {canMail && <button className="btn small" onClick={() => setDraft({ to: draft?.to || to, subject: m.subject, body: m.body })}>Envoyer</button>}
                         <Copy text={`${m.subject}\n\n${m.body}`} />
-                        <a className="btn ghost small" href={composeUrl(profile.gmail, to, m.subject, m.body)} target={profile.gmail ? "_blank" : undefined} rel="noreferrer">{profile.gmail ? "Ouvrir dans Gmail" : "Ouvrir"}</a>
+                        <a className="btn ghost small" href={composeUrl(profile.gmail, to, m.subject, m.body)} target="_blank" rel="noreferrer">Ouvrir dans Gmail</a>
                       </span>
                     </summary>
                     <pre>{m.body}</pre>
