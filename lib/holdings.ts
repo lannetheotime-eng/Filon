@@ -97,6 +97,7 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
       siren: r.siren,
       isHolding: /^(64\.20Z|70\.10Z)$/.test(r.activite_principale || ""),
       name: titleCase(r.nom_complet || r.nom_raison_sociale || ""),
+      brand: titleCase(siege.nom_commercial || (siege.liste_enseignes || [])[0] || ""),
       naf: r.activite_principale || siege.activite_principale || "",
       address: siege.adresse || "",
       city: titleCase(siege.libelle_commune || ""),
@@ -150,4 +151,23 @@ export function demoHoldings(s: HoldingSearch): { leads: HoldingLead[]; scanned:
     holdings: [{ siren: `8${String(20000000 + i * 7654321).slice(0, 8)}`, name: `${owners[i].split(" ")[1]} Holding (démo)`, role: "Président", owners: [{ name: owners[i], role: "Président" }], created: `${[2010, 2014, 2016, 2001, 2017, 2008, 2012, 2019][i]}-01-01` }],
   }));
   return { leads, scanned: 50, total: 312 };
+}
+
+// Les autres sociétés d'un dirigeant (pour trouver l'entreprise « qui décroche » derrière une holding)
+export async function companiesOf(fullName: string, dept?: string): Promise<{ name: string; city: string }[]> {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return [];
+  const prenom = parts[0], nom = parts.slice(1).join(" ");
+  const params: Record<string, string> = { nom_personne: nom, prenoms_personne: prenom, type_personne: "dirigeant", per_page: "10" };
+  if (dept) params.departement = dept;
+  try {
+    const j = await call(params);
+    return (j.results || [])
+      .filter((r: any) => !/^(64\.20Z|70\.10Z|68\.20[AB]|68\.10Z)$/.test(r.activite_principale || ""))
+      .map((r: any) => ({ name: titleCase(r.siege?.nom_commercial || (r.siege?.liste_enseignes || [])[0] || r.nom_complet || ""), city: titleCase(r.siege?.libelle_commune || "") }))
+      .filter((x: any) => x.name)
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
 }

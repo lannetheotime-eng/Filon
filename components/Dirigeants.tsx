@@ -47,17 +47,18 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const setT = (siren: string, patch: Partial<Track>) => setTrack((t) => ({ ...t, [siren]: { ...({ status: "À appeler" } as Track), ...t[siren], ...patch, at: new Date().toISOString() } }));
 
   async function phone(l: HoldingLead) {
-    if (live && !canSpend(1)) { notify("Plafond de requêtes Google du jour atteint"); return; }
+    if (live && !canSpend(2)) { notify("Plafond de requêtes Google du jour atteint"); return; }
     setPhoneBusy(l.siren);
     try {
-      // Pour une holding, on cherche plutôt le dirigeant + la ville ; sinon l'entreprise elle-même
-      const who = l.isHolding ? `${l.people[0]?.name || l.name}` : l.name;
-      const r = await fetch(`/api/phone?name=${encodeURIComponent(who)}&city=${encodeURIComponent(l.city)}`);
+      // Holding : on passe par les autres sociétés de son dirigeant ; sinon l'enseigne puis le nom nettoyé + l'adresse
+      const owner = l.holdings.flatMap((h) => h.owners)[0]?.name || l.people[0]?.name || "";
+      const qs = new URLSearchParams({ name: l.name, city: l.city, brand: l.brand || "", address: l.address, person: owner, holding: l.isHolding ? "1" : "0", dept: l.cp.slice(0, 2) });
+      const r = await fetch(`/api/phone?${qs}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      if (live && !j.demo) spend(1);
-      if (j.phone) { setT(l.siren, { phone: j.phone, site: j.website }); notify(`Téléphone trouvé : ${j.phone}`); }
-      else notify("Pas de téléphone public trouvé sur Google");
+      if (live && j.calls) spend(j.calls);
+      if (j.phone) { setT(l.siren, { phone: j.phone, site: j.website, notes: track[l.siren]?.notes || (j.via ? `Téléphone de ${j.via}` : undefined) }); notify(`Téléphone trouvé${j.via ? ` (via ${j.via})` : ""} : ${j.phone}`); }
+      else notify(j.tried?.length ? `Pas de téléphone public (essayé : ${j.tried.join(", ")})` : "Pas de téléphone public trouvé");
     } catch (e: any) {
       notify(e.message || "Recherche impossible");
     } finally {
@@ -167,7 +168,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
                         {t?.phone ? (
                           <a className="btn small" href={`tel:${t.phone.replace(/\s/g, "")}`}>Appeler {t.phone}</a>
                         ) : (
-                          <button className="btn small" onClick={() => phone(l)} disabled={phoneBusy === l.siren}>{phoneBusy === l.siren ? "Recherche…" : "Trouver le téléphone (1 requête)"}</button>
+                          <button className="btn small" onClick={() => phone(l)} disabled={phoneBusy === l.siren}>{phoneBusy === l.siren ? "Recherche…" : "Trouver le téléphone (1 à 2 requêtes)"}</button>
                         )}
                         <a className="btn ghost small" href={`https://annuaire-entreprises.data.gouv.fr/entreprise/${l.siren}`} target="_blank" rel="noreferrer">Fiche officielle</a>
                         <a className="btn ghost small" href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${lead?.name || ""} ${l.name}`)}`} target="_blank" rel="noreferrer">LinkedIn</a>

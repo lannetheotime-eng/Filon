@@ -6,6 +6,7 @@ export type HoldingLead = {
   isHolding?: boolean; // la société est elle-même une holding (code NAF 64.20Z ou 70.10Z)
   siren: string;
   name: string;
+  brand?: string; // nom commercial ou enseigne
   naf: string;
   address: string;
   city: string;
