@@ -28,3 +28,11 @@ export const IconList = () => (
 export const IconToday = () => (
   <svg {...base}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /><circle cx="12" cy="15" r="1.6" /></svg>
 );
+
+export function IconPeople() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 21V9l9-5 9 5v12" /><path d="M9 21v-6h6v6" /><path d="M3 21h18" />
+    </svg>
+  );
+}

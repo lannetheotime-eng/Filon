@@ -16,11 +16,11 @@ import Today from "../components/Today";
 import Palette, { type PaletteItem } from "../components/Palette";
 import Toast from "../components/Toast";
 import Dirigeants from "../components/Dirigeants";
-import { IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
+import { IconPeople, IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
 
 const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loading: () => <div className="map" /> });
 
-type View = "scan" | "today" | "pipeline" | "bilan" | "reglages";
+type View = "scan" | "today" | "pipeline" | "dirigeants" | "bilan" | "reglages";
 type Recent = { city: string; tradeId: string; at: string };
 type Usage = { used: number; limit: number | null; today: number; dailyLimit: number };
 type Me = { mode: "simple" | "comptes"; user: { email: string; role: "admin" | "user" } | null; usage: Usage | null; google: boolean };
@@ -78,6 +78,9 @@ export default function Home() {
   const [toast, setToast] = useState<string | null>(null);
   const notify = useCallback((m: string) => setToast(m), []);
   const [step, setStep] = useState(0);
+
+  // L'ancien onglet « Dirigeants » de la recherche est devenu une vue à part
+  useEffect(() => { if (mode === "dirigeants") { setMode("sites"); setView("dirigeants"); } }, [mode, setMode]);
 
   // ⌘K / Ctrl+K : palette de commandes
   useEffect(() => {
@@ -353,7 +356,7 @@ export default function Home() {
   const selLeads = selected.map((id) => leads[id]).filter(Boolean);
 
   const paletteItems: PaletteItem[] = [
-    ...([["scan", "Chercher des clients"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
+    ...([["scan", "Chercher des clients"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["dirigeants", "Dirigeants et holdings"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
       id: `v-${v}`, group: "Aller à", label, run: () => setView(v),
     })),
     ...[...TRADES, ...ART_TRADES.filter((t) => !t.hidden)].map((t) => ({
@@ -367,7 +370,7 @@ export default function Home() {
     ...(result?.leads || []).filter((l) => !pipeline[l.id]).map((l) => ({
       id: `r-${l.id}`, group: "Dernière recherche", label: l.name, hint: rowStatus(l).label, run: () => { setView("scan"); setOpenId(l.id); },
     })),
-    { id: "a-dg", group: "Actions", label: "Dirigeants et holdings (registre)", hint: "gratuit", run: () => { setView("scan"); setMode("dirigeants"); } },
+    { id: "a-dg", group: "Actions", label: "Dirigeants et holdings (registre)", hint: "gratuit", run: () => setView("dirigeants") },
     { id: "a-name", group: "Actions", label: "Chercher une entreprise précise par son nom", hint: "1 requête", run: () => { setView("scan"); setByName(true); } },
     { id: "a-save", group: "Actions", label: "Télécharger une sauvegarde", run: exportAll },
     { id: "a-prices", group: "Actions", label: "Régler mes tarifs", run: () => setView("reglages") },
@@ -377,6 +380,7 @@ export default function Home() {
     ["scan", "Chercher", IconScan],
     ["today", "Aujourd'hui", IconToday],
     ["pipeline", "Pipeline", IconBoard],
+    ["dirigeants", "Dirigeants", IconPeople],
     ["bilan", "Bilan", IconStats],
     ["reglages", "Réglages", IconSettings],
   ];
@@ -405,9 +409,8 @@ export default function Home() {
           <div className="mode" role="tablist" aria-label="Ce que tu prospectes">
             <button role="tab" aria-selected={mode === "sites"} onClick={() => setMode("sites")}>Sites et print</button>
             <button role="tab" aria-selected={mode === "tableaux"} onClick={() => setMode("tableaux")}>Tableaux</button>
-            <button role="tab" aria-selected={mode === "dirigeants"} onClick={() => setMode("dirigeants")}>Dirigeants</button>
           </div>
-          {mode === "dirigeants" ? <Dirigeants canSpend={canSpend} spend={spend} notify={notify} live={live} /> : <>
+          {mode === "dirigeants" ? null : <>
           <form className={`searchbar ${byName ? "by-name" : ""}`} onSubmit={(e) => { e.preventDefault(); runScan(); }}>
             {byName && (
               <label className="sb-field grow">
@@ -658,6 +661,8 @@ export default function Home() {
           )}
         </main>
       )}
+
+      {view === "dirigeants" && <main className="find"><Dirigeants canSpend={canSpend} spend={spend} notify={notify} live={live} /></main>}
 
       {view === "today" && <Today leads={leads} pipeline={pipeline} profile={profile} onOpen={setOpenId} routeUrl={routeUrl} />}
 
