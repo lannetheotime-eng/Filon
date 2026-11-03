@@ -36,6 +36,14 @@ function Copy({ text, label = "Copier" }: { text: string; label?: string }) {
 let mailCheck: Promise<boolean> | null = null;
 const mailEnabled = () => (mailCheck ??= fetch("/api/mail/send").then((r) => r.json()).then((j) => !!j.enabled).catch(() => false));
 
+// Ouvre le brouillon dans Gmail (compte choisi dans Réglages), sinon dans l'application mail par défaut
+function composeUrl(gmail: string | undefined, to: string, subject: string, body: string) {
+  if (!gmail?.trim()) return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  if (/iPhone|iPad|iPod/i.test(ua)) return `googlegmail:///co?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return `https://mail.google.com/mail/?view=cm&fs=1&authuser=${encodeURIComponent(gmail.trim())}&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 const plusDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
 export default function LeadDrawer({
@@ -213,7 +221,7 @@ export default function LeadDrawer({
           <div className="d-actions">
             <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lead.address)}`} target="_blank" rel="noreferrer">Itinéraire</a>
             {art && <a className="btn ghost small" href={insta || `https://www.instagram.com/explore/search/keyword/?q=${q}`} target="_blank" rel="noreferrer">{insta ? "Son Instagram" : "Chercher sur Instagram"}</a>}
-            <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(mails[0].subject)}&body=${encodeURIComponent(mails[0].body)}`}>E-mail</a>
+            <a className="btn ghost small" href={composeUrl(profile.gmail, to, mails[0].subject, mails[0].body)} target={profile.gmail ? "_blank" : undefined} rel="noreferrer">{profile.gmail ? "Gmail" : "E-mail"}</a>
             {reportUrl && <Copy text={reportUrl} label="Lien du rapport d'audit" />}
             <details className="more">
               <summary className="btn ghost small">Plus</summary>
@@ -480,7 +488,7 @@ export default function LeadDrawer({
                       <span style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
                         {canMail && <button className="btn small" onClick={() => setDraft({ to: draft?.to || to, subject: m.subject, body: m.body })}>Envoyer</button>}
                         <Copy text={`${m.subject}\n\n${m.body}`} />
-                        <a className="btn ghost small" href={`mailto:${to}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`}>Ouvrir</a>
+                        <a className="btn ghost small" href={composeUrl(profile.gmail, to, m.subject, m.body)} target={profile.gmail ? "_blank" : undefined} rel="noreferrer">{profile.gmail ? "Ouvrir dans Gmail" : "Ouvrir"}</a>
                       </span>
                     </summary>
                     <pre>{m.body}</pre>
