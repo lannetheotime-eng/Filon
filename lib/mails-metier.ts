@@ -218,7 +218,7 @@ ${sign(p)}`,
     subject: l.presence === "equipe" && wpS ? (f ? "le site WordPress du cabinet" : "votre site WordPress") : m.subject[l.presence],
     body: `${hello}
 
-${hook}${l.presence === "equipe" ? "" : ` ${punch}`}
+${f ? "Je serai bref, je sais que votre temps est compté." : "Je fais court, je sais que vous n'avez pas le temps."} ${hook}${l.presence === "equipe" ? "" : ` ${punch}`}
 
 ${what}${p.portfolio ? ` Mon travail : ${p.portfolio}` : ""}
 
