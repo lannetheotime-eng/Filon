@@ -675,6 +675,7 @@ export default function Home() {
               <label className="field">Téléphone<input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></label>
               <label className="field">E-mail<input value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></label>
               <label className="field">Site<input value={profile.site} onChange={(e) => setProfile({ ...profile, site: e.target.value })} /></label>
+              <label className="field" style={{ gridColumn: "1 / -1" }}>Qui tu es, en une ou deux phrases (repris dans tes e-mails)<textarea value={profile.about || ""} placeholder="Je m'appelle Theo, je suis directeur artistique depuis dix ans à Toulouse. Je travaille seul : la même personne s'occupe de votre image et de votre site, du début à la fin." onChange={(e) => setProfile({ ...profile, about: e.target.value })} /></label>
               <label className="field">Lien vers tes réalisations<input value={profile.portfolio || ""} placeholder="ex. thot-studio.fr/realisations" onChange={(e) => setProfile({ ...profile, portfolio: e.target.value })} /></label>
             </div>
           </details>

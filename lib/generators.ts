@@ -1,6 +1,7 @@
 import type { Lead, Profile } from "./types";
 import { getTrade } from "./trades";
 import { detectNeeds } from "./needs";
+import { metierEmails } from "./mails-metier";
 
 const signature = (p: Profile) =>
   [(p.firstName || "") + (p.studio ? ` · ${p.studio}` : ""), p.phone, p.email, p.site].filter(Boolean).join("\n");
@@ -123,6 +124,10 @@ export function objections(l: Lead, p: Profile) {
 }
 
 export function emails(l: Lead, p: Profile, reportUrl?: string) {
+  return metierEmails(l, p, { reportUrl, trade: getTrade(l.tradeId)?.singular || "" });
+}
+
+export function emailsOld(l: Lead, p: Profile, reportUrl?: string) {
   const proof = reviewsLine(l);
   const issues = l.audit?.issues || [];
   const t = getTrade(l.tradeId)!;
