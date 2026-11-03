@@ -161,7 +161,7 @@ function observation(l: Lead, m: Metier, f: boolean) {
 }
 
 export function metierEmails(l: Lead, p: Profile, opts: { reportUrl?: string; trade: string }) {
-  const m = METIERS[l.tradeId] || GENERIC;
+  const m: Metier = METIERS[l.tradeId] || { ...GENERIC, who: opts.trade ? `« ${opts.trade} »` : undefined };
   const f = formal(l.tradeId);
   const hello = f ? "Bonjour Maître," : "Bonjour,";
   const link = p.portfolio ? `\n\nQuelques réalisations : ${p.portfolio}` : p.site ? `\n\nMon travail : ${p.site}` : "";

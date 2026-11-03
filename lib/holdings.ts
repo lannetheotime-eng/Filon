@@ -42,6 +42,7 @@ function lastFinances(f: any): { year?: string; ca?: number; net?: number } {
 export async function searchHoldings(s: HoldingSearch): Promise<{ leads: HoldingLead[]; scanned: number; total: number; next?: number }> {
   const zp = await zoneParams(s.zone);
   const base: Record<string, string> = { ...zp, per_page: "25" };
+  if (s.name?.trim()) base.q = s.name.trim();
   if (s.naf.length) base.activite_principale = s.naf.join(",");
   if (s.effectif) base.tranche_effectif_salarie = s.effectif;
   const pages = Math.max(1, Math.min(4, s.pages || 2));

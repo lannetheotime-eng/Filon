@@ -10,6 +10,7 @@ const STATUS = ["À appeler", "Appelé", "À rappeler", "RDV", "Pas intéressé"
 export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend: (n: number) => boolean; spend: (n: number) => void; notify: (m: string) => void; live: boolean }) {
   const [sector, setSector] = usePersistent("filon.dg.sector", 0);
   const [custom, setCustom] = useState("");
+  const [name, setName] = useState("");
   const [zone, setZone] = usePersistent("filon.dg.zone", "31");
   const [effectif, setEffectif] = useState("");
   const [holdingOnly, setHoldingOnly] = useState(true);
@@ -23,14 +24,14 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const [phoneBusy, setPhoneBusy] = useState("");
 
   const naf = custom.trim() ? custom.split(/[,\s]+/).filter(Boolean) : SECTORS[sector]?.naf || [];
-  const holdingSector = naf.every((n) => n === "64.20Z" || n === "70.10Z");
+  const holdingSector = naf.length > 0 && naf.every((n) => n === "64.20Z" || n === "70.10Z");
 
   async function go(demo = false, more = false) {
     setBusy(true); setErr("");
     try {
       const r = await fetch("/api/holdings", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ naf, zone, effectif, holdingOnly: holdingSector ? false : holdingOnly, pages: 4, from: more ? res?.next : 1, demo }),
+        body: JSON.stringify({ name, naf, zone, effectif, holdingOnly: holdingSector ? false : holdingOnly, pages: 4, from: more ? res?.next : 1, demo }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -96,6 +97,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
             {SECTORS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
         </label>
+        <label className="sb-field"><span>Nom (facultatif)</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="entreprise ou dirigeant" /></label>
         <label className="sb-field"><span>Ou codes NAF</span><input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="ex. 64.20Z" /></label>
         <label className="sb-field"><span>Zone</span><input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="31, 31000 ou Toulouse" /></label>
         <label className="sb-field"><span>Taille</span>
