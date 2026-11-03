@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "./lib/token";
 
 // Pages accessibles sans connexion : le rapport envoyé aux prospects, la connexion, l'icône de l'appli, le radar Vendu loué
-const PUBLIC = [/^\/rapport/, /^\/ia(\/|$)/, /^\/api\/ia$/, /^\/connexion/, /^\/loue$/, /^\/vendu-loue\.html$/, /^\/api\/auth\//, /^\/manifest\.webmanifest$/, /^\/icon/, /^\/apple-icon/];
+const PUBLIC = [/^\/rapport/, /^\/ia(\/|$)/, /^\/api\/ia$/, /^\/connexion/, /^\/loue$/, /^\/api\/loue$/, /^\/api\/auth\//, /^\/manifest\.webmanifest$/, /^\/icon/, /^\/apple-icon/];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
