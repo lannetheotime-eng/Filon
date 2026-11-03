@@ -185,46 +185,58 @@ ${m.ask}
 ${sign(p)}`,
   };
 
-  // Version courte : quatre phrases, lisible en quinze secondes sur un téléphone
-  const PUNCH: Record<string, [string, string]> = {
-    boulangerie: ["Le dimanche matin, on va dans la boulangerie qui affiche ses horaires.", "Je passe vous montrer deux exemples cette semaine ?"],
-    boucherie: ["Avant les fêtes, les commandes vont à ceux qu'on trouve en deux clics.", "Je passe vous montrer deux exemples cette semaine ?"],
-    fleuriste: ["Pour un mariage ou un deuil, on commande chez le fleuriste dont on voit les compositions.", "Je passe vous montrer deux exemples cette semaine ?"],
-    restaurant: ["Le soir, on choisit en trente secondes : la carte, trois photos, un bouton pour réserver.", "Je passe un après-midi, hors service ?"],
-    coiffeur: ["Une cliente qui ne voit ni vos tarifs ni un créneau réserve ailleurs, sans appeler.", "Je passe un mardi matin vous montrer deux exemples ?"],
-    beaute: ["Une cliente qui ne voit ni vos soins ni vos tarifs réserve ailleurs, sans appeler.", "Je passe un matin vous montrer deux exemples ?"],
-    garage: ["Avant de confier sa voiture, on veut voir à qui on a affaire.", "Je passe en début d'après-midi vous montrer deux exemples ?"],
-    photographe: ["On réserve un photographe sur ses images. Encore faut-il les trouver.", "Un café pour en parler ?"],
-    avocat: ["Un justiciable cherche un avocat pour son problème précis. S'il ne le voit pas écrit, il passe au cabinet suivant.", "Auriez-vous quinze minutes dans les prochaines semaines ?"],
-    notaire: ["Avant une succession ou un achat, on choisit l'office qui rassure et explique.", "Auriez-vous quinze minutes dans les prochaines semaines ?"],
+  // Version courte : chaleureuse, on se présente d'abord, un constat dit avec tact, une seule question
+  const ASK: Record<string, string> = {
+    avocat: "Seriez-vous d'accord pour un échange de quinze minutes ? Je peux passer au cabinet si c'est plus simple.",
+    notaire: "Accepteriez-vous un échange de quinze minutes ? Je peux passer à l'office si c'est plus simple.",
+    restaurant: "Est-ce que je peux passer un après-midi, hors service, vous montrer quelques exemples ?",
+    photographe: "Ça vous dirait qu'on prenne un café pour en parler ?",
   };
-  const [punch, shortAsk] = PUNCH[l.tradeId] || ["Entre trois artisans, on appelle celui dont on voit les chantiers.", "On s'appelle dix minutes cette semaine ?"];
-  const n0 = note(l);
-  const net = /instagram/i.test(l.socialUrl || "") ? "Instagram" : /facebook/i.test(l.socialUrl || "") ? "Facebook" : "sur les réseaux";
-  const pt = (l.deep?.checks.find((c) => c.status === "fail")?.title || l.audit?.issues?.[0] || "").replace(/\.$/, "");
+  const ARTISANS = ["plombier", "electricien", "macon", "menuisier", "peintre", "paysagiste"];
+  const softAsk = ASK[l.tradeId] || (ARTISANS.includes(l.tradeId) ? "Est-ce que ça vous dirait qu'on s'appelle dix minutes, ou que je passe vous voir entre deux chantiers ?" : "Est-ce que je peux passer vous montrer quelques exemples, au moment qui vous arrange ?");
+  const praise = (l.rating || 0) >= 4.5 && (l.reviews || 0) >= 20
+    ? `${l.reviews} avis à ${String(l.rating).replace(".", ",")} de moyenne, vos clients vous recommandent clairement`
+    : (l.reviews || 0) >= 10 ? `${l.reviews} avis sur Google, vous avez une vraie clientèle` : "";
+  const net = /instagram/i.test(l.socialUrl || "") ? "Instagram" : /facebook/i.test(l.socialUrl || "") ? "Facebook" : "";
   const wpS = l.audit?.cms === "WordPress" || l.deep?.cms === "WordPress";
-  const hook =
-    l.presence === "aucun" ? `En cherchant ${m.who || "votre métier"} à ${l.city}, je suis tombé sur votre fiche Google${n0 ? ` : ${n0}` : ""}. Mais pas de site.`
-    : l.presence === "reseaux" ? `En cherchant ${m.who || "votre métier"} à ${l.city}, je suis tombé sur votre page ${net === "sur les réseaux" ? "" : net}${n0 ? ` (${n0} sur Google)` : ""}. Elle tourne bien, mais c'est tout ce qu'on trouve.`.replace("page  ", "page ")
-    : l.presence === "vieux" ? `J'ai ouvert votre site sur mon téléphone${pt ? `. Premier constat : ${lc(pt)}` : ", et il a pris quelques années"}.`
-    : wpS ? "Votre site est sous WordPress et il tient la route. Qui s'occupe des mises à jour ?"
-    : "Votre site est correct, je ne viens pas vous parler de le refaire.";
-  const what =
+  const SENT: [RegExp, string][] = [
+    [/t[ée]l[ée]phone|mobile|viewport/i, "il ne s'affiche pas correctement sur mobile"],
+    [/HTTPS|s[ée]curis/i, "il n'est pas sécurisé (le navigateur affiche « Non sécurisé »)"],
+    [/mis à jour depuis (\d{4})|pied de page : (\d{4})/i, "il n'a pas l'air d'avoir été mis à jour depuis $1$2"],
+    [/lent|performance|affich/i, "il met du temps à s'afficher"],
+    [/WordPress [\d.]+/i, "sa version de WordPress a plusieurs années de retard"],
+    [/outil gratuit/i, "il est fait avec un outil gratuit qui affiche sa propre marque"],
+  ];
+  const raw = [l.deep?.checks.find((c) => c.status === "fail")?.title, ...(l.audit?.issues || [])].filter(Boolean) as string[];
+  let defect = "";
+  for (const r of raw) { const hit = SENT.find(([re]) => re.test(r)); if (hit) { const m2 = r.match(hit[0]); defect = hit[1].replace("$1", m2?.[1] || "").replace("$2", m2?.[2] || ""); break; } }
+  const intro = p.about?.trim()
+    || `Je m'appelle ${p.firstName || "…"}, je suis directeur artistique${p.studio ? ` (${p.studio})` : ""}. Je crée l'identité visuelle et le site WordPress ${f ? "de cabinets et de professions libérales" : `pour ${m.peers || "des commerces et des indépendants"}`}, et je reste leur interlocuteur ensuite.`;
+  const why =
+    l.presence === "aucun" ? `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur ${l.tradeId === "notaire" ? "votre office" : f ? "votre cabinet" : "votre fiche Google"}.${praise ? ` ${praise.charAt(0).toUpperCase() + praise.slice(1)}.` : ""} En revanche, je n'ai pas trouvé de site, et c'est dommage : c'est souvent là que se fait le choix.`
+    : l.presence === "reseaux" ? `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur votre page${net ? ` ${net}` : ""}.${praise ? ` ${praise.charAt(0).toUpperCase() + praise.slice(1)} sur Google.`.replace("sur Google sur Google", "sur Google") : ""} Votre page est vivante, mais c'est la seule chose qu'on trouve, et elle ne vous appartient pas vraiment.`
+    : l.presence === "vieux" ? `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur ${l.name}.${praise ? ` ${praise.charAt(0).toUpperCase() + praise.slice(1)}.` : ""} J'ai ouvert votre site sur mon téléphone : ${defect || "il mériterait un coup de neuf"}. C'est dommage, c'est souvent là que les gens vous découvrent.`
+    : wpS ? `Votre site est sous WordPress et il est bien fait. Je vous écris pour une raison simple : un site WordPress a besoin d'être mis à jour et sauvegardé régulièrement, et c'est souvent ce qu'on n'a pas le temps de faire.`
+    : `Votre site est bien fait, je ne viens pas vous proposer de le refaire. Je pense plutôt à ce que vos clients voient au quotidien : ${m.brand}.`;
+  const bring =
     l.presence === "equipe"
-      ? wpS ? "Je m'en occupe au mois : mises à jour, sécurité, sauvegardes, petites retouches. Vous n'avez plus à y penser." : `Je fais aussi des chartes graphiques : ${m.brand}, enfin cohérents.`
-      : "Je fais des chartes graphiques et des sites WordPress dont vous gardez la main : vous changez vous-même textes, photos et horaires.";
+      ? wpS ? "Je peux m'en occuper au mois : mises à jour, sécurité, sauvegardes, et les petites modifications quand vous en avez besoin." : "Une charte graphique bien déclinée, c'est ce qui fait qu'on vous reconnaît du premier coup d'œil."
+      : `Je pourrais vous proposer une identité qui vous ressemble et un site pour ${m.site}. Et vous en gardez la main : vous modifiez vous-même vos textes, vos photos et vos horaires, sans dépendre d'un prestataire.`;
   const short = {
     label: "Version courte",
     subject: l.presence === "equipe" && wpS ? (f ? "le site WordPress du cabinet" : "votre site WordPress") : m.subject[l.presence],
-    body: `${hello}
+    body: `${f ? "Maître," : "Bonjour,"}
 
-${hook}${l.presence === "equipe" ? "" : ` ${punch}`}
+${intro}
 
-${what}${p.portfolio ? ` Mon travail : ${p.portfolio}` : ""}
+${why}
 
-${shortAsk}
+${bring}${p.portfolio ? ` Quelques réalisations : ${p.portfolio}` : ""}
 
-${[p.firstName, p.studio].filter(Boolean).join(" · ")}${p.phone ? `\n${p.phone}` : ""}`,
+${softAsk}
+
+Bien à vous,
+${sign(p)}`,
   };
 
   // La « page de vente » en e-mail : plus complète, pour un prospect qui a répondu ou que tu as déjà vu
