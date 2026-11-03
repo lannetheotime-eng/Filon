@@ -142,6 +142,7 @@ export type Profile = {
   dailyCap?: number; // plafond de requêtes Google par jour (30 = reste dans le gratuit)
   guarantees?: string; // une garantie par ligne (uniquement ce que tu offres vraiment)
   references?: string; // un client de référence par ligne
+  why?: string; // pourquoi te choisir, un point par ligne (repris dans les e-mails)
   about?: string; // qui tu es, en une ou deux phrases (repris dans les e-mails)
   art?: ArtProfile; // prospection de tes tableaux
 };

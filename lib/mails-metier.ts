@@ -126,7 +126,18 @@ function sign(p: Profile) {
 
 function whoAmI(p: Profile, m: Metier) {
   if (p.about?.trim()) return p.about.trim();
-  return `Je suis ${p.firstName || "…"}, directeur artistique indépendant${p.studio ? ` (${p.studio})` : ""}. Je crée des chartes graphiques et des sites WordPress pour ${m.peers || "des indépendants"}, et je reste leur seul interlocuteur ensuite.`;
+  return `Je suis ${p.firstName || "…"}, directeur artistique indépendant${p.studio ? ` (${p.studio})` : ""}. Je crée des chartes graphiques et des sites WordPress pour ${m.peers || "des indépendants"}.`;
+}
+
+// Pourquoi me choisir : tes lignes (Réglages), sinon des points vrais par défaut
+export function whyMe(p: Profile, l: Lead) {
+  const own = (p.why || "").split("\n").map((x) => x.trim()).filter(Boolean);
+  if (own.length) return own.slice(0, 4);
+  return [
+    "Un seul interlocuteur, de la charte graphique au site, puis pour l'entretien.",
+    "Vous gardez la main : textes, photos, horaires et actualités se modifient depuis WordPress, sans toucher une ligne de code.",
+    `Un site pensé pour le téléphone et pour être trouvé à ${l.city}.`,
+  ];
 }
 
 const note = (l: Lead) => (l.reviews ? `${l.reviews} avis${l.rating ? `, ${String(l.rating).replace(".", ",")} de moyenne` : ""}` : "");
@@ -167,11 +178,57 @@ export function metierEmails(l: Lead, p: Profile, opts: { reportUrl?: string; tr
 
 ${observation(l, m, f)}${l.presence === "equipe" ? "" : `\n\n${m.stake}`}
 
-${whoAmI(p, m)} ${offer}${report}${link}
+${whoAmI(p, m)} ${offer}${l.presence === "equipe" ? "" : `\n\nCe qui change avec moi :\n${whyMe(p, l).map((x) => `– ${x}`).join("\n")}`}${report}${link}
 
 ${m.ask}
 
 ${sign(p)}`,
+  };
+
+  // La « page de vente » en e-mail : plus complète, pour un prospect qui a répondu ou que tu as déjà vu
+  const lines = (x?: string) => (x || "").split("\n").map((y) => y.trim()).filter(Boolean);
+  const refs = lines(p.references).slice(0, 3);
+  const guar = lines(p.guarantees).slice(0, 3);
+  const wpSite = l.audit?.cms === "WordPress" || l.deep?.cms === "WordPress";
+  const name = p.firstName || "…";
+  const ps = l.presence === "vieux" && opts.reportUrl
+    ? `P.-S. Le détail de ce que j'ai relevé sur votre site, avec une solution pour chaque point : ${opts.reportUrl}`
+    : l.reviews && l.reviews >= 20
+    ? `P.-S. ${l.reviews} avis sur Google, c'est un vrai capital. Il mérite une vitrine qui vous appartient.`
+    : `P.-S. Le premier échange ne vous engage à rien : si ce n'est pas pour vous, je vous le dirai aussi.`;
+  const sales = {
+    label: "Présentation complète",
+    subject: f ? `Une image et un site à la hauteur ${l.tradeId === "notaire" ? "de l'office" : "du cabinet"}` : `${l.name} : une image et un site à votre hauteur`,
+    body: `${hello}
+
+${observation(l, m, f)}
+
+${m.stake}
+
+${whoAmI(p, m)}
+
+Ce que je vous propose
+
+– Une charte graphique : logo, couleurs et typographies, déclinés sur ${m.brand}.
+– ${l.presence === "equipe" && wpSite ? "La reprise de votre site WordPress actuel, sans tout refaire" : "Un site WordPress"} pour ${m.site}.
+– Un accompagnement au mois : mises à jour, sécurité, sauvegardes et petites évolutions, pour ne plus avoir à y penser.
+
+Ce qui change avec moi
+
+${whyMe(p, l).map((x) => `– ${x}`).join("\n")}
+
+Comment ça se passe
+
+1. Un premier échange de quinze minutes, pour comprendre votre ${f ? "activité" : "métier"} et vos clients.
+2. Je vous propose une direction graphique et un devis clair, ligne par ligne.
+3. Je construis le site, vous le voyez avancer et le validez avant la mise en ligne.
+4. Je vous montre comment modifier vos contenus vous-même, puis je reste là pour l'entretien.
+${refs.length ? `\nIls m'ont fait confiance : ${refs.join(", ")}.\n` : ""}${guar.length ? `\nMes engagements :\n${guar.map((g) => `– ${g}`).join("\n")}\n` : ""}${p.price ? `\nPour vous donner un ordre d'idée : ${p.price}.\n` : ""}${p.portfolio || p.site ? `\nMes réalisations : ${p.portfolio || p.site}\n` : ""}
+${m.ask}
+
+${name === "…" ? "" : `${name}\n`}${[[p.studio, "directeur artistique"].filter(Boolean).join(" · "), p.phone, p.site].filter(Boolean).join("\n")}
+
+${ps}`,
   };
 
   const relance = {
@@ -207,5 +264,5 @@ Je vous prépare une proposition pour ${l.name}, avec les priorités dont on a p
 ${sign(p)}`,
   };
 
-  return [first, relance, last, after];
+  return [first, sales, relance, last, after];
 }
