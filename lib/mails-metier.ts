@@ -163,7 +163,7 @@ function observation(l: Lead, m: Metier, f: boolean) {
 export function metierEmails(l: Lead, p: Profile, opts: { reportUrl?: string; trade: string }) {
   const m = METIERS[l.tradeId] || GENERIC;
   const f = formal(l.tradeId);
-  const hello = f ? "Maître," : "Bonjour,";
+  const hello = f ? "Bonjour Maître," : "Bonjour,";
   const link = p.portfolio ? `\n\nQuelques réalisations : ${p.portfolio}` : p.site ? `\n\nMon travail : ${p.site}` : "";
   const report = l.presence === "vieux" && opts.reportUrl ? `\n\nJ'ai noté ce que j'ai relevé, avec une solution pour chaque point : ${opts.reportUrl}` : "";
   const offer =
@@ -185,58 +185,62 @@ ${m.ask}
 ${sign(p)}`,
   };
 
-  // Version courte : chaleureuse, on se présente d'abord, un constat dit avec tact, une seule question
-  const ASK: Record<string, string> = {
-    avocat: "Seriez-vous d'accord pour un échange de quinze minutes ? Je peux passer au cabinet si c'est plus simple.",
-    notaire: "Accepteriez-vous un échange de quinze minutes ? Je peux passer à l'office si c'est plus simple.",
-    restaurant: "Est-ce que je peux passer un après-midi, hors service, vous montrer quelques exemples ?",
-    photographe: "Ça vous dirait qu'on prenne un café pour en parler ?",
+  // Version courte, validée par Theo : qui je suis, pourquoi je viens, ce que je propose, un appel au moment qui l'arrange
+  const FOCUS: Record<string, string> = {
+    avocat: "vos domaines d'intervention", notaire: "l'office et les démarches courantes", boulangerie: "vos horaires et vos produits",
+    boucherie: "vos produits et votre traiteur", fleuriste: "vos compositions", restaurant: "votre carte", coiffeur: "vos tarifs et vos réalisations",
+    beaute: "vos soins et vos tarifs", garage: "vos prestations", photographe: "votre travail",
   };
-  const ARTISANS = ["plombier", "electricien", "macon", "menuisier", "peintre", "paysagiste"];
-  const softAsk = ASK[l.tradeId] || (ARTISANS.includes(l.tradeId) ? "Est-ce que ça vous dirait qu'on s'appelle dix minutes, ou que je passe vous voir entre deux chantiers ?" : "Est-ce que je peux passer vous montrer quelques exemples, au moment qui vous arrange ?");
-  const praise = (l.rating || 0) >= 4.5 && (l.reviews || 0) >= 20
-    ? `${l.reviews} avis à ${String(l.rating).replace(".", ",")} de moyenne, vos clients vous recommandent clairement`
-    : (l.reviews || 0) >= 10 ? `${l.reviews} avis sur Google, vous avez une vraie clientèle` : "";
-  const net = /instagram/i.test(l.socialUrl || "") ? "Instagram" : /facebook/i.test(l.socialUrl || "") ? "Facebook" : "";
+  const focus = FOCUS[l.tradeId] || "vos réalisations et votre zone d'intervention";
   const wpS = l.audit?.cms === "WordPress" || l.deep?.cms === "WordPress";
+  const peer = f ? "un confrère" : "un concurrent";
+  const r = l.context?.rival;
+  const near = r ? (r.distance < 1500 ? "à quelques rues" : r.distance < 3000 ? "pas loin de chez vous" : "") : "";
+  const rivalTail = r && near ? `, alors qu'${peer.replace("un ", "un ")} ${near} en a un. Ceux qui comparent sur leur téléphone vont souvent vers lui.` : ". Or ceux qui comparent sur leur téléphone vont souvent vers ceux qui en ont un.";
+  const goodReviews = (l.rating || 0) >= 4.5 && (l.reviews || 0) >= 10 ? "Vos avis sont excellents" : (l.rating || 0) >= 4 && (l.reviews || 0) >= 5 ? "Vos clients sont contents de vous" : "";
+  const net = /instagram/i.test(l.socialUrl || "") ? "Instagram" : /facebook/i.test(l.socialUrl || "") ? "Facebook" : "";
+  const place = l.tradeId === "notaire" ? "votre office" : f ? "votre cabinet" : l.name;
   const SENT: [RegExp, string][] = [
-    [/t[ée]l[ée]phone|mobile|viewport/i, "il ne s'affiche pas correctement sur mobile"],
-    [/HTTPS|s[ée]curis/i, "il n'est pas sécurisé (le navigateur affiche « Non sécurisé »)"],
-    [/mis à jour depuis (\d{4})|pied de page : (\d{4})/i, "il n'a pas l'air d'avoir été mis à jour depuis $1$2"],
-    [/lent|performance|affich/i, "il met du temps à s'afficher"],
-    [/WordPress [\d.]+/i, "sa version de WordPress a plusieurs années de retard"],
-    [/outil gratuit/i, "il est fait avec un outil gratuit qui affiche sa propre marque"],
+    [/t[ée]l[ée]phone|mobile|viewport/i, "s'affiche mal sur téléphone"],
+    [/HTTPS|s[ée]curis/i, "n'est pas sécurisé (le navigateur affiche « Non sécurisé »)"],
+    [/mis à jour depuis (\d{4})|pied de page : (\d{4})/i, "n'a pas l'air d'avoir été mis à jour depuis $1$2"],
+    [/lent|performance|affich/i, "met du temps à s'afficher"],
+    [/WordPress [\d.]+/i, "tourne sur une version de WordPress très ancienne"],
+    [/outil gratuit/i, "est fait avec un outil gratuit qui affiche sa propre marque"],
   ];
   const raw = [l.deep?.checks.find((c) => c.status === "fail")?.title, ...(l.audit?.issues || [])].filter(Boolean) as string[];
   let defect = "";
-  for (const r of raw) { const hit = SENT.find(([re]) => re.test(r)); if (hit) { const m2 = r.match(hit[0]); defect = hit[1].replace("$1", m2?.[1] || "").replace("$2", m2?.[2] || ""); break; } }
-  const intro = p.about?.trim()
-    || `Je m'appelle ${p.firstName || "…"}, je suis directeur artistique${p.studio ? ` (${p.studio})` : ""}. Je crée l'identité visuelle et le site WordPress ${f ? "de cabinets et de professions libérales" : `pour ${m.peers || "des commerces et des indépendants"}`}, et je reste leur interlocuteur ensuite.`;
+  for (const x of raw) { const hit = SENT.find(([re]) => re.test(x)); if (hit) { const mm = x.match(hit[0]); defect = hit[1].replace("$1", mm?.[1] || "").replace("$2", mm?.[2] || ""); break; } }
+  const me = p.about?.trim() || `Je suis ${p.firstName || "…"}, directeur artistique${p.studio ? ` (${p.studio})` : ""}.`;
+  const intro = /wordpress/i.test(me) ? me : `${me} Je crée des sites WordPress et des identités visuelles, surtout pour ${f ? "des cabinets et des professions libérales" : m.peers || "des commerces et des indépendants"}.`;
+  const met = `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur ${place}.`;
   const why =
-    l.presence === "aucun" ? `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur ${l.tradeId === "notaire" ? "votre office" : f ? "votre cabinet" : "votre fiche Google"}.${praise ? ` ${praise.charAt(0).toUpperCase() + praise.slice(1)}.` : ""} En revanche, je n'ai pas trouvé de site, et c'est dommage : c'est souvent là que se fait le choix.`
-    : l.presence === "reseaux" ? `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur votre page${net ? ` ${net}` : ""}.${praise ? ` ${praise.charAt(0).toUpperCase() + praise.slice(1)} sur Google.`.replace("sur Google sur Google", "sur Google") : ""} Votre page est vivante, mais c'est la seule chose qu'on trouve, et elle ne vous appartient pas vraiment.`
-    : l.presence === "vieux" ? `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur ${l.name}.${praise ? ` ${praise.charAt(0).toUpperCase() + praise.slice(1)}.` : ""} J'ai ouvert votre site sur mon téléphone : ${defect || "il mériterait un coup de neuf"}. C'est dommage, c'est souvent là que les gens vous découvrent.`
-    : wpS ? `Votre site est sous WordPress et il est bien fait. Je vous écris pour une raison simple : un site WordPress a besoin d'être mis à jour et sauvegardé régulièrement, et c'est souvent ce qu'on n'a pas le temps de faire.`
-    : `Votre site est bien fait, je ne viens pas vous proposer de le refaire. Je pense plutôt à ce que vos clients voient au quotidien : ${m.brand}.`;
+    l.presence === "aucun" ? `${met} ${goodReviews ? `${goodReviews}, mais vous` : "Vous"} n'avez pas de site${rivalTail}`
+    : l.presence === "reseaux" ? `${met} ${goodReviews ? `${goodReviews}, et votre` : "Votre"} page${net ? ` ${net}` : ""} est active, mais vous n'avez pas de site à vous${rivalTail}`
+    : l.presence === "vieux" ? `${met} ${goodReviews ? `${goodReviews}, mais votre` : "Votre"} site ${defect || "mériterait un coup de neuf"}, et c'est souvent là que les gens vous découvrent.`
+    : wpS ? "Votre site est sous WordPress et il tient la route. Mais un site WordPress doit être mis à jour et sauvegardé régulièrement, et c'est souvent ce qu'on n'a pas le temps de faire."
+    : "Votre site est bien fait, je ne viens pas vous proposer de le refaire.";
   const bring =
-    l.presence === "equipe"
-      ? wpS ? "Je peux m'en occuper au mois : mises à jour, sécurité, sauvegardes, et les petites modifications quand vous en avez besoin." : "Une charte graphique bien déclinée, c'est ce qui fait qu'on vous reconnaît du premier coup d'œil."
-      : `Je pourrais vous proposer une identité qui vous ressemble et un site pour ${m.site}. Et vous en gardez la main : vous modifiez vous-même vos textes, vos photos et vos horaires, sans dépendre d'un prestataire.`;
+    l.presence === "vieux" ? `Je peux ${wpS ? "le reprendre, il est déjà sous WordPress" : "vous le refaire sur WordPress"} : un site simple, qui présente clairement ${focus}, et que vous pourrez modifier vous-même.`
+    : l.presence === "equipe" ? (wpS ? "Je peux m'en occuper au mois, pour que vous n'ayez plus à y penser." : `Je crée aussi des identités visuelles, déclinées sur ${m.brand}.`)
+    : `Je peux vous faire un site simple, qui présente clairement ${focus}, et que vous pourrez modifier vous-même.`;
   const short = {
     label: "Version courte",
-    subject: l.presence === "equipe" && wpS ? (f ? "le site WordPress du cabinet" : "votre site WordPress") : m.subject[l.presence],
-    body: `${f ? "Maître," : "Bonjour,"}
+    subject: l.presence === "equipe" ? (wpS ? "votre site WordPress" : "votre identité visuelle") : "votre site",
+    body: `${hello}
 
 ${intro}
 
 ${why}
 
-${bring}${p.portfolio ? ` Quelques réalisations : ${p.portfolio}` : ""}
+${bring}
 
-${softAsk}
+Si le sujet vous intéresse, nous pouvons en parler par téléphone, au moment qui vous arrange.
 
-Bien à vous,
-${sign(p)}`,
+Je vous souhaite une belle journée,
+Bien cordialement,
+${p.firstName || ""}
+${[p.studio, p.phone, p.site].filter(Boolean).join(" · ")}`,
   };
 
   // La « page de vente » en e-mail : plus complète, pour un prospect qui a répondu ou que tu as déjà vu
