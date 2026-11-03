@@ -1,6 +1,6 @@
 // Types et référentiels partagés pour la recherche « Dirigeants & holdings »
 
-export type HoldingSearch = { name?: string; naf: string[]; zone: string; effectif?: string; holdingOnly: boolean; pages?: number; from?: number; demo?: boolean };
+export type HoldingSearch = { caMin?: number; netMin?: number; name?: string; naf: string[]; zone: string; effectif?: string; holdingOnly: boolean; pages?: number; from?: number; demo?: boolean };
 
 export type HoldingLead = {
   isHolding?: boolean; // la société est elle-même une holding (code NAF 64.20Z ou 70.10Z)

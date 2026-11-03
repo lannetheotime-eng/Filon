@@ -11,6 +11,8 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const [sector, setSector] = usePersistent("filon.dg.sector", 0);
   const [custom, setCustom] = useState("");
   const [name, setName] = useState("");
+  const [caMin, setCaMin] = usePersistent("filon.dg.ca", "");
+  const [netMin, setNetMin] = usePersistent("filon.dg.net", "");
   const [zone, setZone] = usePersistent("filon.dg.zone", "31");
   const [effectif, setEffectif] = useState("");
   const [holdingOnly, setHoldingOnly] = useState(true);
@@ -31,7 +33,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
     try {
       const r = await fetch("/api/holdings", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, naf, zone, effectif, holdingOnly: holdingSector ? false : holdingOnly, pages: 4, from: more ? res?.next : 1, demo }),
+        body: JSON.stringify({ caMin, netMin, name, naf, zone, effectif, holdingOnly: holdingSector ? false : holdingOnly, pages: 4, from: more ? res?.next : 1, demo }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -104,8 +106,19 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
         <label className="sb-field"><span>Taille</span>
           <select value={effectif} onChange={(e) => setEffectif(e.target.value)}>{EFFECTIF.map((x) => <option key={x.code} value={x.code}>{x.label}</option>)}</select>
         </label>
+        <label className="sb-field"><span>Chiffre d'affaires</span>
+          <select value={caMin} onChange={(e) => setCaMin(e.target.value)}>
+            {[["", "Tous"], ["100000", "100 k€ et plus"], ["500000", "500 k€ et plus"], ["1000000", "1 M€ et plus"], ["2000000", "2 M€ et plus"], ["5000000", "5 M€ et plus"], ["10000000", "10 M€ et plus"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+        <label className="sb-field"><span>Bénéfice</span>
+          <select value={netMin} onChange={(e) => setNetMin(e.target.value)}>
+            {[["", "Tous"], ["1", "Bénéficiaire"], ["50000", "50 k€ et plus"], ["100000", "100 k€ et plus"], ["250000", "250 k€ et plus"], ["500000", "500 k€ et plus"], ["1000000", "1 M€ et plus"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
         <button className="btn sb-go" disabled={busy}>{busy ? "Recherche…" : "Chercher"}</button>
       </form>
+      {(caMin || netMin) && <p className="hint" style={{ margin: "8px 0 0" }}>Filtre financier : seules les sociétés qui publient leurs comptes apparaissent (beaucoup de petites sociétés les gardent confidentiels).</p>}
       <div className="sb-under">
         {!holdingSector && (
           <label className="switch small"><input type="checkbox" checked={holdingOnly} onChange={(e) => setHoldingOnly(e.target.checked)} /><span aria-hidden />Seulement celles détenues par une holding</label>

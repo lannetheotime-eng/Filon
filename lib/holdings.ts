@@ -43,6 +43,9 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
   const zp = await zoneParams(s.zone);
   const base: Record<string, string> = { ...zp, per_page: "25" };
   if (s.name?.trim()) base.q = s.name.trim();
+  // Filtres financiers (comptes publiés uniquement)
+  if (s.caMin) base.ca_min = String(s.caMin);
+  if (s.netMin != null) base.resultat_net_min = String(s.netMin);
   if (s.naf.length) base.activite_principale = s.naf.join(",");
   if (s.effectif) base.tranche_effectif_salarie = s.effectif;
   const pages = Math.max(1, Math.min(4, s.pages || 2));
@@ -116,7 +119,8 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
       }),
     };
   });
-  return { leads, scanned: results.length, total, next: from + pages <= lastPage ? from + pages : undefined };
+  const filtered = leads.filter((l) => (!s.caMin || (l.ca != null && l.ca >= s.caMin)) && (s.netMin == null || (l.net != null && l.net >= s.netMin)));
+  return { leads: filtered, scanned: results.length, total, next: from + pages <= lastPage ? from + pages : undefined };
 }
 
 // Exemple fictif, pour la démonstration (aucun appel au registre)
