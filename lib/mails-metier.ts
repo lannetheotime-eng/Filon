@@ -201,7 +201,7 @@ ${sign(p)}`,
   const net = /instagram/i.test(l.socialUrl || "") ? "Instagram" : /facebook/i.test(l.socialUrl || "") ? "Facebook" : "";
   const place = l.tradeId === "notaire" ? "votre office" : f ? "votre cabinet" : l.name;
   const SENT: [RegExp, string][] = [
-    [/t[ée]l[ée]phone|mobile|viewport/i, "s'affiche mal sur téléphone"],
+    [/t[ée]l[ée]phone|mobile|viewport/i, "n'est pas adapté aux petits écrans"],
     [/HTTPS|s[ée]curis/i, "n'est pas sécurisé (le navigateur affiche « Non sécurisé »)"],
     [/mis à jour depuis (\d{4})|pied de page : (\d{4})/i, "n'a pas l'air d'avoir été mis à jour depuis $1$2"],
     [/lent|performance|affich/i, "met du temps à s'afficher"],
@@ -212,18 +212,20 @@ ${sign(p)}`,
   let defect = "";
   for (const x of raw) { const hit = SENT.find(([re]) => re.test(x)); if (hit) { const mm = x.match(hit[0]); defect = hit[1].replace("$1", mm?.[1] || "").replace("$2", mm?.[2] || ""); break; } }
   const me = p.about?.trim() || `Je suis ${p.firstName || "…"}, directeur artistique${p.studio ? ` (${p.studio})` : ""}.`;
-  const intro = /wordpress/i.test(me) ? me : `${me} Je crée des sites WordPress et des identités visuelles, surtout pour ${f ? "des cabinets et des professions libérales" : m.peers || "des commerces et des indépendants"}.`;
+  const intro = /wordpress/i.test(me) ? me : `${me} Je crée des sites WordPress et des identités visuelles, notamment pour ${f ? "des cabinets et des professions libérales" : m.peers || "des commerces et des indépendants"}.`;
   const met = `En cherchant ${m.who || "votre activité"} à ${l.city}, je suis tombé sur ${place}.`;
+  const liked = (l.rating || 0) >= 4.3 && (l.reviews || 0) >= 10 ? " Vos clients disent beaucoup de bien de vous sur Google." : "";
+  const forWho = l.tradeId === "notaire" ? "pour l'office" : f ? "pour le cabinet" : "à votre nom";
   const why =
-    l.presence === "aucun" ? `${met} ${goodReviews ? `${goodReviews}, mais vous` : "Vous"} n'avez pas de site${rivalTail}`
-    : l.presence === "reseaux" ? `${met} ${goodReviews ? `${goodReviews}, et votre` : "Votre"} page${net ? ` ${net}` : ""} est active, mais vous n'avez pas de site à vous${rivalTail}`
-    : l.presence === "vieux" ? `${met} ${goodReviews ? `${goodReviews}, mais votre` : "Votre"} site ${defect || "mériterait un coup de neuf"}, et c'est souvent là que les gens vous découvrent.`
-    : wpS ? "Votre site est sous WordPress et il tient la route. Mais un site WordPress doit être mis à jour et sauvegardé régulièrement, et c'est souvent ce qu'on n'a pas le temps de faire."
-    : "Votre site est bien fait, je ne viens pas vous proposer de le refaire.";
+    l.presence === "aucun" ? `${met}${liked} En revanche, je n'ai pas trouvé de site ${forWho}, et c'est souvent là que les gens se décident.`
+    : l.presence === "reseaux" ? `${met}${liked} Votre page${net ? ` ${net}` : ""} est active, mais je n'ai pas trouvé de site ${forWho}, et c'est souvent là que les gens se décident.`
+    : l.presence === "vieux" ? `${met}${liked} En ouvrant votre site sur mon téléphone, j'ai remarqué qu'il ${defect || "mériterait un coup de neuf"} : c'est dommage, car c'est souvent là que les gens se décident.`
+    : wpS ? `${met} Votre site est sous WordPress et il tient la route. Mais un site WordPress doit être mis à jour et sauvegardé régulièrement, et c'est souvent ce qu'on n'a pas le temps de faire.`
+    : `${met} Votre site est bien fait, je ne viens pas vous proposer de le refaire.`;
   const bring =
-    l.presence === "vieux" ? `Je peux ${wpS ? "le reprendre, il est déjà sous WordPress" : "vous le refaire sur WordPress"} : un site simple, qui présente clairement ${focus}, et que vous pourrez modifier vous-même.`
+    l.presence === "vieux" ? `Je peux le moderniser${wpS ? " en gardant WordPress" : ""} : un site simple et clair, qui présente ${focus}, et que vous pourrez modifier vous-même.`
     : l.presence === "equipe" ? (wpS ? "Je peux m'en occuper au mois, pour que vous n'ayez plus à y penser." : `Je crée aussi des identités visuelles, déclinées sur ${m.brand}.`)
-    : `Je peux vous faire un site simple, qui présente clairement ${focus}, et que vous pourrez modifier vous-même.`;
+    : `Je peux vous créer un site simple et clair, qui présente ${focus}, et que vous pourrez modifier vous-même.`;
   const short = {
     label: "Version courte",
     subject: l.presence === "equipe" ? (wpS ? "votre site WordPress" : "votre identité visuelle") : "votre site",
