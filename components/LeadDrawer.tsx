@@ -476,7 +476,18 @@ export default function LeadDrawer({
                   <input type="email" value={to} placeholder={lead.website && !lead.emailChecked ? "Recherche de son e-mail sur son site…" : "contact@entreprise.fr"} onChange={(e) => onLead({ email: e.target.value.trim() })} />
                 </label>
                 {lead.emailOthers?.length ? <p className="hint" style={{ marginTop: -4 }}>Autres adresses trouvées : {lead.emailOthers.map((e) => <button key={e} className="chip" style={{ marginRight: 4 }} onClick={() => onLead({ email: e })}>{e}</button>)}</p> : null}
-                {!to && <p className="hint" style={{ marginTop: 0 }}>{lead.website ? "Pas d'e-mail public sur son site : regarde sa fiche Google ou sa page Facebook, puis colle-le ici." : "Pas de site, donc pas d'e-mail public : regarde sa page Facebook ou demande-le lors de ta visite, puis colle-le ici."}</p>}
+                {!to && (
+                  <div className="mail-help">
+                    <p className="hint" style={{ margin: 0 }}>{lead.website ? (lead.emailChecked ? "Pas d'e-mail public sur son site." : "Recherche sur son site…") : "Pas de site, donc Filon ne peut pas lire d'e-mail. Cherche-le ici, puis colle-le dans le champ :"}</p>
+                    <div className="actions">
+                      <a className="chip" href={`https://www.google.com/search?q=${encodeURIComponent(`"${lead.name}" ${lead.city} email OR @`)}`} target="_blank" rel="noreferrer">Google</a>
+                      <a className="chip" href={`https://www.pagesjaunes.fr/recherche/${encodeURIComponent(lead.city)}/${encodeURIComponent(lead.name)}`} target="_blank" rel="noreferrer">Pages Jaunes</a>
+                      {lead.socialUrl && <a className="chip" href={lead.socialUrl} target="_blank" rel="noreferrer">Sa page réseaux</a>}
+                      {lead.tradeId === "avocat" && <a className="chip" href={`https://www.google.com/search?q=${encodeURIComponent(`${lead.name} avocat ${lead.city} annuaire barreau`)}`} target="_blank" rel="noreferrer">Annuaire du barreau</a>}
+                      {lead.mapsUrl && <a className="chip" href={lead.mapsUrl} target="_blank" rel="noreferrer">Fiche Google</a>}
+                    </div>
+                  </div>
+                )}
                 {!canMail && <p className="hint" style={{ marginTop: 0 }}>Pour envoyer depuis Filon et savoir si le mail est bien reçu, branche Resend (voir Réglages › Envoi des e-mails).</p>}
                 {draft && (
                   <div className="compose">

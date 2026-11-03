@@ -327,6 +327,34 @@ export default function Home() {
     [setPipeline]
   );
 
+  // Cherche l'e-mail public de toutes les entreprises affichées qui ont un site (gratuit)
+  const [mailScan, setMailScan] = useState<{ done: number; total: number } | null>(null);
+  async function findEmails(list: Lead[]) {
+    const todo = list.filter((l) => l.website && !l.email && !l.audit?.email && !l.emailChecked && !l.id.startsWith("demo-"));
+    if (!todo.length) { notify("Aucun site à fouiller : les e-mails déjà connus sont affichés"); return; }
+    let done = 0, found = 0;
+    setMailScan({ done, total: todo.length });
+    const apply = (id: string, patch: Partial<Lead>) => {
+      setLeads((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+      setResult((r) => (r ? { ...r, leads: r.leads.map((x) => (x.id === id ? { ...x, ...patch } : x)) } : r));
+    };
+    const worker = async () => {
+      while (todo.length) {
+        const l = todo.shift()!;
+        try {
+          const j = await fetch(`/api/email?site=${encodeURIComponent(l.website!)}`).then((r) => r.json());
+          if (j.email) found++;
+          apply(l.id, j.email ? { email: j.email, emailOthers: j.others, emailChecked: true } : { emailChecked: true });
+        } catch {}
+        done++;
+        setMailScan({ done, total: done + todo.length });
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    setMailScan(null);
+    notify(`${found} e-mail${found > 1 ? "s" : ""} trouvé${found > 1 ? "s" : ""}`);
+  }
+
   function addMany(ids: string[]) {
     const n = ids.filter((id) => !pipeline[id]).length;
     for (const id of ids) if (!pipeline[id]) updatePipeline(id, { stage: "a_contacter" });
@@ -541,7 +569,7 @@ export default function Home() {
                 {artMode && <p className="eyebrow">Lieux pour tes tableaux · vente directe{priceText(profile) ? ` · ${priceText(profile)}` : ""}</p>}
                 <p className="hint">
                   {result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées
-                  {regProgress ? ` · ancienneté ${regProgress.done}/${regProgress.total}` : ""}
+                  {regProgress ? ` · ancienneté ${regProgress.done}/${regProgress.total}` : ""}{mailScan ? ` · e-mails ${mailScan.done}/${mailScan.total}` : ""}
                 </p>
               </div>
 
@@ -591,6 +619,7 @@ export default function Home() {
                         </label>
                       )}
                       <button onClick={() => addMany(shown.map((l) => l.id))} disabled={!shown.length}>Tout ajouter au pipeline</button>
+                      <button onClick={() => findEmails(shown)} disabled={!shown.length || !!mailScan}>Trouver les e-mails sur leurs sites</button>
                       <button onClick={() => { exportScan(); notify("Export CSV téléchargé"); }} disabled={!shown.length}>Exporter en CSV</button>
                     </div>
                   </details>
@@ -622,6 +651,7 @@ export default function Home() {
                                   {fit ? <span className={`pill ${fit.universe ? "none" : fit.insta ? "social" : "ok"}`}>{fit.universe ? "Forte identité" : fit.insta ? "Instagram" : "À démarcher"}</span> : <span className={`pill ${rs.tone}`}>{rs.label}</span>}
                                   {l.rating ? <span>{String(l.rating).replace(".", ",")} ★ ({l.reviews})</span> : null}
                                   {act && <span>depuis {act.since}</span>}
+                                  {(l.email || l.audit?.email) && <span className="mail-chip">✉ {l.email || l.audit?.email}</span>}
                                 </div>
                                 {top && <div className="next">→ {top.title}</div>}
                                 {fit && <div className="next">→ Apporte : {seriesFor(l.tradeId)[0].name}</div>}
