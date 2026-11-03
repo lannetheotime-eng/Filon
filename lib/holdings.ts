@@ -39,20 +39,23 @@ function lastFinances(f: any): { year?: string; ca?: number; net?: number } {
   return { year, ca: f[year]?.ca ?? undefined, net: f[year]?.resultat_net ?? undefined };
 }
 
-export async function searchHoldings(s: HoldingSearch): Promise<{ leads: HoldingLead[]; scanned: number; total: number }> {
+export async function searchHoldings(s: HoldingSearch): Promise<{ leads: HoldingLead[]; scanned: number; total: number; next?: number }> {
   const zp = await zoneParams(s.zone);
   const base: Record<string, string> = { ...zp, per_page: "25" };
   if (s.naf.length) base.activite_principale = s.naf.join(",");
   if (s.effectif) base.tranche_effectif_salarie = s.effectif;
   const pages = Math.max(1, Math.min(4, s.pages || 2));
+  const from = Math.max(1, s.from || 1);
 
   const results: any[] = [];
   let total = 0;
-  for (let p = 1; p <= pages; p++) {
+  let lastPage = 1;
+  for (let p = from; p < from + pages; p++) {
     const j = await call({ ...base, page: String(p) });
     total = j.total_results || total;
     results.push(...(j.results || []));
-    if (p >= (j.total_pages || 1)) break;
+    lastPage = j.total_pages || 1;
+    if (p >= lastPage) break;
     await wait(180); // l'API accepte environ 7 requêtes par seconde
   }
 
@@ -91,6 +94,7 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
     const siege = r.siege || {};
     return {
       siren: r.siren,
+      isHolding: /^(64\.20Z|70\.10Z)$/.test(r.activite_principale || ""),
       name: titleCase(r.nom_complet || r.nom_raison_sociale || ""),
       naf: r.activite_principale || siege.activite_principale || "",
       address: siege.adresse || "",
@@ -110,11 +114,24 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
       }),
     };
   });
-  return { leads, scanned: results.length, total };
+  return { leads, scanned: results.length, total, next: from + pages <= lastPage ? from + pages : undefined };
 }
 
 // Exemple fictif, pour la démonstration (aucun appel au registre)
 export function demoHoldings(s: HoldingSearch): { leads: HoldingLead[]; scanned: number; total: number } {
+  if (s.naf.some((n) => n === "64.20Z" || n === "70.10Z")) {
+    const ppl = ["Claire Martin", "Julien Fabre", "Sophie Garcia", "Thomas Roux", "Marie Lefebvre", "Antoine Dupuy", "Laura Bonnet", "Nicolas Sarda", "Paul Esquerré", "Inès Castan"];
+    return {
+      leads: ppl.map((n, i) => ({
+        siren: `8${String(30000000 + i * 4567891).slice(0, 8)}`, isHolding: true, name: `${n.split(" ")[1]} Holding (démo)`, naf: i % 3 ? "64.20Z" : "70.10Z",
+        address: `${4 + i * 9} allée ${["Jean Jaurès", "des Demoiselles", "de Brienne", "Frédéric Mistral", "de Barcelone"][i % 5]}, 31000 Toulouse`, city: "Toulouse", cp: "31000",
+        created: `${[2004, 2011, 2016, 1999, 2019, 2008, 2013, 2021, 2002, 2015][i]}-06-01`, effectif: i % 4 ? "00" : "01",
+        ca: i % 3 ? undefined : [450000, 0, 0, 1200000][i % 4] || undefined, net: i % 3 ? undefined : 120000 + i * 10000, finYear: i % 3 ? undefined : "2024",
+        people: [{ name: n, role: "Président" }], holdings: [],
+      })),
+      scanned: 50, total: 2840,
+    };
+  }
   const names = ["Pharmacie des Carmes", "Cabinet Dentaire Saint-Cyprien", "Atelier Riquet Architecture", "Garonne Électricité", "Expertise Capitole", "Clinique Vétérinaire du Canal", "Toulouse Menuiserie Bois", "Laboratoire Compans"];
   const owners = ["Claire Martin", "Julien Fabre", "Sophie Garcia", "Thomas Roux", "Marie Lefebvre", "Antoine Dupuy", "Laura Bonnet", "Nicolas Sarda"];
   const leads: HoldingLead[] = names.map((n, i) => ({

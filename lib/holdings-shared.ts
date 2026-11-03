@@ -1,8 +1,9 @@
 // Types et référentiels partagés pour la recherche « Dirigeants & holdings »
 
-export type HoldingSearch = { naf: string[]; zone: string; effectif?: string; holdingOnly: boolean; pages?: number; demo?: boolean };
+export type HoldingSearch = { naf: string[]; zone: string; effectif?: string; holdingOnly: boolean; pages?: number; from?: number; demo?: boolean };
 
 export type HoldingLead = {
+  isHolding?: boolean; // la société est elle-même une holding (code NAF 64.20Z ou 70.10Z)
   siren: string;
   name: string;
   naf: string;
@@ -24,6 +25,7 @@ export type HoldingLead = {
 
 // Secteurs fréquents pour un cabinet de gestion de patrimoine (codes NAF rév. 2)
 export const SECTORS: { label: string; naf: string[] }[] = [
+  { label: "Toutes les holdings (64.20Z, 70.10Z)", naf: ["64.20Z", "70.10Z"] },
   { label: "Professions de santé (médecins, dentistes, kinés)", naf: ["86.21Z", "86.22A", "86.22B", "86.22C", "86.23Z", "86.90E"] },
   { label: "Pharmacies", naf: ["47.73Z"] },
   { label: "Vétérinaires", naf: ["75.00Z"] },
@@ -39,7 +41,6 @@ export const SECTORS: { label: string; naf: string[] }[] = [
   { label: "Restauration", naf: ["56.10A", "56.10C", "56.30Z"] },
   { label: "Commerce de gros", naf: ["46.90Z", "46.73A", "46.69B"] },
   { label: "Transport routier", naf: ["49.41A", "49.41B"] },
-  { label: "Les holdings elles-mêmes", naf: ["64.20Z", "70.10Z"] },
 ];
 
 export const NAF_LABEL: Record<string, string> = {

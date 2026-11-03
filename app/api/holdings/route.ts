@@ -13,6 +13,7 @@ export async function POST(req: Request) {
       effectif: b.effectif ? String(b.effectif) : undefined,
       holdingOnly: b.holdingOnly !== false,
       pages: Number(b.pages) || 2,
+      from: Number(b.from) || 1,
     };
     if (!s.naf.length && !s.zone.trim()) return NextResponse.json({ error: "Choisis au moins un secteur ou une zone." }, { status: 400 });
     return NextResponse.json(b.demo ? demoHoldings(s) : await searchHoldings(s));

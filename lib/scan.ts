@@ -368,6 +368,22 @@ export async function findByName(name: string, cityQuery: string, tradeId: strin
   return { city, tradeId, leads, scanned: leads.length, withSite: 0, audited: audits.size, calls: 1, demo: false };
 }
 
+// Téléphone d'une entreprise trouvée dans le registre : une requête Google, à la demande
+export async function findPhone(name: string, city: string) {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) return { phone: "05 61 00 00 00 (démo)", website: undefined, mapsUrl: undefined, label: `${name} (démo)`, demo: true };
+  const res = await fetch(PLACES_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": "places.displayName,places.nationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.formattedAddress" },
+    body: JSON.stringify({ textQuery: `${name} ${city}`, languageCode: "fr", regionCode: "FR", pageSize: 1 }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Google Places a refusé la requête (${res.status}).`);
+  const p = (await res.json()).places?.[0];
+  if (!p) return { phone: undefined, label: undefined, demo: false };
+  return { phone: p.nationalPhoneNumber as string | undefined, website: p.websiteUri as string | undefined, mapsUrl: p.googleMapsUri as string | undefined, label: `${p.displayName?.text || ""} · ${p.formattedAddress || ""}`, demo: false };
+}
+
 // Détails à la demande : avis clients à citer pendant l'approche.
 export async function placeDetails(id: string): Promise<Details> {
   const key = process.env.GOOGLE_PLACES_API_KEY;

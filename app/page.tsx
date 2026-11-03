@@ -15,6 +15,7 @@ import Dashboard from "../components/Dashboard";
 import Today from "../components/Today";
 import Palette, { type PaletteItem } from "../components/Palette";
 import Toast from "../components/Toast";
+import Dirigeants from "../components/Dirigeants";
 import { IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList } from "../components/Icons";
 
 const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loading: () => <div className="map" /> });
@@ -34,7 +35,7 @@ function routeUrl(stops: Lead[]) {
 
 export default function Home() {
   const [view, setView] = useState<View>("scan");
-  const [mode, setMode] = usePersistent<"sites" | "tableaux">("filon.mode", "sites");
+  const [mode, setMode] = usePersistent<"sites" | "tableaux" | "dirigeants">("filon.mode", "sites");
   const [siteTrade, setSiteTrade] = usePersistent("filon.trade", "boulangerie");
   const [artTrade, setArtTrade] = usePersistent("filon.artTrade", "art-deco");
   const tradeId = mode === "tableaux" ? artTrade : siteTrade;
@@ -366,6 +367,7 @@ export default function Home() {
     ...(result?.leads || []).filter((l) => !pipeline[l.id]).map((l) => ({
       id: `r-${l.id}`, group: "Dernière recherche", label: l.name, hint: rowStatus(l).label, run: () => { setView("scan"); setOpenId(l.id); },
     })),
+    { id: "a-dg", group: "Actions", label: "Dirigeants et holdings (registre)", hint: "gratuit", run: () => { setView("scan"); setMode("dirigeants"); } },
     { id: "a-name", group: "Actions", label: "Chercher une entreprise précise par son nom", hint: "1 requête", run: () => { setView("scan"); setByName(true); } },
     { id: "a-save", group: "Actions", label: "Télécharger une sauvegarde", run: exportAll },
     { id: "a-prices", group: "Actions", label: "Régler mes tarifs", run: () => setView("reglages") },
@@ -403,7 +405,9 @@ export default function Home() {
           <div className="mode" role="tablist" aria-label="Ce que tu prospectes">
             <button role="tab" aria-selected={mode === "sites"} onClick={() => setMode("sites")}>Sites et print</button>
             <button role="tab" aria-selected={mode === "tableaux"} onClick={() => setMode("tableaux")}>Tableaux</button>
+            <button role="tab" aria-selected={mode === "dirigeants"} onClick={() => setMode("dirigeants")}>Dirigeants</button>
           </div>
+          {mode === "dirigeants" ? <Dirigeants canSpend={canSpend} spend={spend} notify={notify} live={live} /> : <>
           <form className={`searchbar ${byName ? "by-name" : ""}`} onSubmit={(e) => { e.preventDefault(); runScan(); }}>
             {byName && (
               <label className="sb-field grow">
@@ -643,7 +647,8 @@ export default function Home() {
             </section>
           )}
 
-          {selected.length > 0 && (
+          </>}
+          {selected.length > 0 && mode !== "dirigeants" && (
             <div className="selbar" role="region" aria-label="Tournée">
               <span><b>{selected.length}</b> dans la tournée{selected.length >= 10 ? " (max.)" : ""}</span>
               <a className="btn small" href={routeUrl(selLeads)} target="_blank" rel="noreferrer"><IconRoute /> Itinéraire</a>

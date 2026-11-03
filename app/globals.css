@@ -1034,3 +1034,29 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 @media (max-width: 640px) { .report-cats li { grid-template-columns: 1fr 34px; } .report-cats i { grid-column: 1 / -1; grid-row: 2; } }
 .audit .verdict { background: none !important; padding: 0 !important; border: 0 !important; color: var(--ink-2); box-shadow: none !important; }
 .ck details > p.ck-meta { margin: 0 12px 12px 30px; font-size: 12px; }
+
+/* ——— Dirigeants et holdings ——— */
+.dg { padding: 0; }
+.dg .dash-head { margin: 4px 0 16px; }
+.dg .dash-head h1 { font-size: 32px; letter-spacing: -0.03em; }
+.dg-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; background: rgba(15,15,17,.85); border: 1px solid var(--line); border-radius: 28px; padding: 6px; max-width: 1100px; box-shadow: 0 30px 80px -30px rgba(21,77,255,.45); }
+.dg-form .sb-field { flex: 1 1 150px; border-radius: 22px; }
+.dg-form .sb-field + .sb-field { border-left: 1px solid var(--line); border-radius: 22px; }
+.dg-form .dg-wide { flex: 2 1 260px; }
+.dg-form .sb-go { flex: 0 0 auto; }
+.dg-row { flex-wrap: wrap; }
+.dg-row .mono { font-family: var(--data); font-size: 14px; }
+.dg-detail { flex: 1 1 100%; padding: 2px 18px 16px 72px; }
+.nf-tags-f { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.nf-tags-f span { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--mark-soft); color: var(--mark-ink); }
+.dg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.dg-grid > div { display: grid; gap: 3px; align-content: start; background: var(--raise); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; font-size: 13px; color: var(--ink-2); }
+.dg-grid small { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--mark-ink); }
+.dg-grid b { color: var(--ink); }
+.dg-track { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+.dg-track select { background: var(--raise); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 13px; }
+.dg-notes { width: 100%; margin-top: 8px; min-height: 70px; background: var(--raise); border: 1px solid var(--line); border-radius: 12px; color: var(--ink); padding: 10px; font: inherit; font-size: 13.5px; }
+@media (max-width: 900px) { .dg-form { border-radius: 22px; } .dg-form .sb-field, .dg-form .sb-field + .sb-field { border-left: 0; flex-basis: 45%; } .dg-form .dg-wide { flex-basis: 100%; } .dg-form .sb-go { flex: 1 1 100%; } .dg-detail { padding: 2px 12px 14px; } }
+.row.dg-row { display: flex !important; flex-wrap: wrap; align-items: center; }
+.row.dg-row .row-main { flex: 1 1 0; min-width: 0; }
+@media (max-width: 640px) { .mode button { padding: 8px 10px; font-size: 11.5px; letter-spacing: .06em; white-space: nowrap; } }
