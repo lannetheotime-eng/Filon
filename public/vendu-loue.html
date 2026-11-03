@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vendu loué</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Trouver les biens vendus avec locataire sur Leboncoin et voir ce qu'ils rapportent.">
+<meta name="theme-color" content="#1F3A93">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6ECF2; --surface:#FFFFFF; --ink:#16213A; --muted:#566178; --line:#C7D0DC;
+  --plaque:#1F3A93; --plaque-ink:#FFFFFF; --field:#F3F6F9;
+  --ok:#0B7A52; --warn:#8F5A00; --no:#B42318;
+  --a:#009C6D; --b:#52B153; --c:#A5CC74; --d:#F4E70F; --e:#F0B40F; --f:#EB8235; --g:#D7221F;
+  --radius-s:6px; --radius-l:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E182B; --surface:#16233B; --ink:#E9EFF7; --muted:#9BA9BF; --line:#2B3B59;
+    --plaque:#6F8CF0; --plaque-ink:#0E182B; --field:#1C2B47;
+    --ok:#3CCB95; --warn:#F0B40F; --no:#FF7A6E; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E182B; --surface:#16233B; --ink:#E9EFF7; --muted:#9BA9BF; --line:#2B3B59;
+  --plaque:#6F8CF0; --plaque-ink:#0E182B; --field:#1C2B47;
+  --ok:#3CCB95; --warn:#F0B40F; --no:#FF7A6E; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Archivo",system-ui,sans-serif; font-size:16px; line-height:1.5;
+  font-variant-numeric:tabular-nums;
+}
+.wrap{max-width:560px; margin:0 auto; padding-block:28px 48px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px))}
+header{padding:8px 0 24px}
+h1{
+  margin:0; font-size:clamp(48px,15vw,76px); line-height:.88; font-weight:880;
+  font-stretch:68%; letter-spacing:-.015em;
+}
+.lede{margin:12px 0 0; color:var(--muted); max-width:34ch}
+section{background:var(--surface); border-radius:var(--radius-l); padding:20px 16px; margin-top:16px}
+h2{margin:0 0 4px; font-size:24px; line-height:1.15; font-weight:780; font-stretch:80%}
+.hint{margin:0 0 16px; color:var(--muted); font-size:14px}
+label{display:block; font-size:14px; font-weight:600; margin:0 0 6px}
+input,textarea{
+  width:100%; font:inherit; color:var(--ink); background:var(--field);
+  border:1.5px solid transparent; border-radius:var(--radius-s); padding:11px 12px;
+}
+textarea{min-height:150px; resize:vertical; font-size:15px}
+input:focus,textarea:focus{outline:none; border-color:var(--plaque)}
+.row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.field{margin-bottom:14px}
+button,.btn{
+  appearance:none; font:inherit; font-weight:700; border:0; cursor:pointer;
+  border-radius:var(--radius-s); padding:12px 16px; text-decoration:none; display:inline-flex;
+  align-items:center; justify-content:center; gap:8px; min-height:46px;
+}
+.primary{background:var(--plaque); color:var(--plaque-ink)}
+.ghost{background:transparent; color:var(--ink); box-shadow:inset 0 0 0 1.5px var(--line)}
+button:focus-visible,.btn:focus-visible,a:focus-visible{outline:3px solid var(--plaque); outline-offset:2px}
+.actions{display:flex; gap:10px; flex-wrap:wrap}
+.actions .primary{flex:1}
+
+/* Radar */
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px}
+.chip{
+  font-weight:650; font-size:15px; padding:10px 14px; border-radius:999px; min-height:44px;
+  background:var(--field); color:var(--ink); text-decoration:none; display:inline-flex; align-items:center;
+}
+.chip:active{background:var(--plaque); color:var(--plaque-ink)}
+.tip{font-size:14px; color:var(--muted); margin:14px 0 0}
+
+/* Statut */
+.status{display:flex; gap:10px; align-items:flex-start; padding:12px; border-radius:var(--radius-s); background:var(--field); margin:16px 0}
+.dot{width:12px; height:12px; border-radius:50%; flex:none; margin-top:6px}
+.status strong{display:block}
+.status q{display:block; color:var(--muted); font-size:14px; margin-top:2px; quotes:"« " " »"}
+.s-loue .dot{background:var(--ok)} .s-loue strong{color:var(--ok)}
+.s-verifier .dot,.s-viager .dot{background:var(--warn)} .s-verifier strong,.s-viager strong{color:var(--warn)}
+.s-libre .dot,.s-none .dot{background:var(--no)} .s-libre strong,.s-none strong{color:var(--no)}
+
+/* Chiffres */
+.figures{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line); border-radius:var(--radius-s); overflow:hidden; margin:4px 0 18px}
+.fig{background:var(--surface); padding:12px}
+.fig span{display:block; font-size:13px; color:var(--muted)}
+.fig b{font-size:24px; font-weight:800; font-stretch:75%}
+
+/* Échelle de rentabilité façon DPE */
+.ladder-title{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px}
+.ladder-title b{font-size:15px}
+.ladder-title small{color:var(--muted); font-size:13px}
+.ladder{display:grid; gap:4px; margin-bottom:18px}
+.rung{display:flex; align-items:center; gap:10px; opacity:.28; transition:opacity .25s}
+.rung.on{opacity:1}
+.bar{
+  height:30px; display:flex; align-items:center; justify-content:space-between; padding:0 22px 0 10px;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 50%,calc(100% - 14px) 100%,0 100%);
+  color:#fff; font-weight:800; font-size:13px;
+}
+.bar i{font-style:normal; font-weight:900; font-size:18px; font-stretch:70%}
+.bar.dark{color:#16213A}
+.rung .val{font-weight:800; font-size:20px; font-stretch:75%; white-space:nowrap; visibility:hidden}
+.rung.on .val{visibility:visible}
+.rung.on .bar{height:38px}
+@media (prefers-reduced-motion:reduce){.rung{transition:none}}
+
+/* Liste */
+.list{display:grid; gap:10px; margin-top:8px}
+.item{border:1.5px solid var(--line); border-radius:var(--radius-s); padding:12px; display:grid; grid-template-columns:auto 1fr; gap:12px}
+.tag{
+  width:46px; height:46px; display:grid; place-items:center; color:#fff; font-weight:900; font-size:24px; font-stretch:70%;
+  clip-path:polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%); padding-right:8px;
+}
+.tag.dark{color:#16213A}
+.tag.none{background:var(--field); color:var(--muted); font-size:16px}
+.item h3{margin:0; font-size:16px; line-height:1.3; font-weight:700}
+.item .meta{color:var(--muted); font-size:14px; margin:2px 0 6px}
+.item .nums{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:14px}
+.item .nums b{font-weight:800}
+.item .links{display:flex; gap:14px; margin-top:8px; font-size:14px}
+.item .links a,.item .links button{color:var(--plaque); font-weight:700; background:none; padding:0; min-height:0; text-decoration:underline; text-underline-offset:3px}
+.empty{color:var(--muted); padding:18px 0 4px}
+.toolbar{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px}
+.count{color:var(--muted); font-size:14px}
+[hidden]{display:none!important}
+footer{color:var(--muted); font-size:13px; margin-top:24px; text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Vendu<br>loué</h1>
+    <p class="lede">Les biens vendus avec leur locataire, et ce qu'ils rapportent vraiment.</p>
+  </header>
+
+  <!-- 1. Chercher -->
+  <section aria-labelledby="t-chercher">
+    <h2 id="t-chercher">Chercher sur Leboncoin</h2>
+    <p class="hint">Chaque bouton ouvre Leboncoin déjà filtré sur les ventes immobilières.</p>
+    <div class="row">
+      <div class="field">
+        <label for="ville">Ville</label>
+        <input id="ville" placeholder="Toulouse" autocomplete="address-level2">
+      </div>
+      <div class="field">
+        <label for="budget">Budget max (€)</label>
+        <input id="budget" inputmode="numeric" placeholder="250 000">
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <p class="tip">Sur Leboncoin, enregistre la recherche pour recevoir une alerte à chaque nouvelle annonce.</p>
+  </section>
+
+  <!-- 2. Analyser -->
+  <section aria-labelledby="t-analyser">
+    <h2 id="t-analyser">Analyser une annonce</h2>
+    <p class="hint">Ouvre l'annonce, sélectionne tout le texte, copie-le et colle-le ici. Tu peux aussi remplir les champs à la main.</p>
+    <div class="field">
+      <label for="texte">Texte de l'annonce</label>
+      <textarea id="texte" placeholder="Appartement T3 vendu loué…&#10;185 000 €&#10;Surface loi Carrez : 61,5 m²&#10;Loyer 720 € HC, bail en cours jusqu'en 2027"></textarea>
+    </div>
+    <div class="field">
+      <label for="lien">Lien de l'annonce (facultatif)</label>
+      <input id="lien" type="url" inputmode="url" placeholder="https://www.leboncoin.fr/ad/…">
+    </div>
+    <div class="actions">
+      <button class="primary" id="analyser" type="button">Analyser</button>
+    </div>
+
+    <div id="resultat" hidden>
+      <div class="status" id="statut"><span class="dot"></span><div><strong></strong><q></q></div></div>
+
+      <div class="field">
+        <label for="r-titre">Titre</label>
+        <input id="r-titre">
+      </div>
+      <div class="row">
+        <div class="field"><label for="r-prix">Prix (€)</label><input id="r-prix" inputmode="decimal"></div>
+        <div class="field"><label for="r-carrez" id="l-carrez">Surface Carrez (m²)</label><input id="r-carrez" inputmode="decimal"></div>
+        <div class="field"><label for="r-loyer">Loyer mensuel (€)</label><input id="r-loyer" inputmode="decimal"></div>
+        <div class="field"><label for="r-ville">Ville</label><input id="r-ville"></div>
+      </div>
+      <div class="field"><label for="r-bail">Bail</label><input id="r-bail" placeholder="Fin de bail, type de bail…"></div>
+
+      <div class="figures">
+        <div class="fig"><span>Prix au m²</span><b id="o-m2">–</b></div>
+        <div class="fig"><span>Loyers sur un an</span><b id="o-an">–</b></div>
+      </div>
+
+      <div class="ladder-title"><b>Rentabilité brute</b><small>loyer × 12 ÷ prix</small></div>
+      <div class="ladder" id="ladder"></div>
+
+      <div class="actions">
+        <button class="primary" id="ajouter" type="button">Ajouter à ma liste</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Liste -->
+  <section aria-labelledby="t-liste">
+    <div class="toolbar">
+      <h2 id="t-liste">Ma liste</h2>
+      <button class="ghost" id="export" type="button" hidden>Copier le tableau</button>
+    </div>
+    <p class="count" id="count"></p>
+    <div class="list" id="liste"></div>
+    <p class="empty" id="vide">Aucune annonce pour l'instant. Analyse une annonce puis ajoute-la ici : la liste se classe toute seule, de la plus rentable à la moins rentable.</p>
+  </section>
+
+  <footer>La liste reste enregistrée sur ce téléphone.</footer>
+</div>
+
+<script>
+/* PARSER START */
+function toNum(s){
+  if(s==null) return null;
+  s=String(s).replace(/[\s\u00a0\u202f]/g,'');
+  if(/^\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,'');
+  s=s.replace(',','.');
+  const n=parseFloat(s);
+  return isNaN(n)?null:n;
+}
+function snippet(flat,idx,len){
+  const a=Math.max(0,idx-30), b=Math.min(flat.length,idx+len+40);
+  return (a>0?'…':'')+flat.slice(a,b).trim()+(b<flat.length?'…':'');
+}
+function parseAnnonce(raw){
+  const text=String(raw||'').replace(/\r/g,'');
+  const flat=text.replace(/[\s\u00a0\u202f]+/g,' ');
+  const low=flat.toLowerCase();
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const res={titre:'',ville:'',prix:null,carrez:null,surfaceSource:null,loyer:null,finBail:'',statut:'none',preuve:''};
+
+  // Titre : première ligne qui ressemble à un titre
+  res.titre=(lines.find(l=>l.length>6&&l.length<140&&!/^\d/.test(l)&&!/€/.test(l)&&!/^(accueil|ventes immobili|leboncoin)/i.test(l))||(lines[0]||'').split(/,\s/)[0]).slice(0,120);
+
+  // Ville + code postal
+  const v=flat.match(/([A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+(?: [A-Za-zÀ-ÿ'’\-]+){0,3}) \(?(\d{5})\)?\b(?!\s*(?:€|euros|k€|m²|m2))/);
+  if(v) res.ville=v[1].trim()+' '+v[2];
+
+  // Montants en €
+  const amounts=[]; let m;
+  const re=/(\d{1,3}(?:[ .]\d{3})+|\d+(?:[.,]\d+)?)\s*(€|euros?\b|eur\b)/gi;
+  while((m=re.exec(flat))) amounts.push({n:toNum(m[1]),idx:m.index,len:m[0].length});
+  const reK=/(\d+(?:[.,]\d+)?)\s*k\s?€/gi;
+  while((m=reK.exec(flat))) amounts.push({n:toNum(m[1])*1000,idx:m.index,len:m[0].length});
+  amounts.sort((a,b)=>a.idx-b.idx);
+  amounts.forEach(x=>{
+    x.before=low.slice(Math.max(0,x.idx-45),x.idx);
+    x.after=low.slice(x.idx+x.len,x.idx+x.len+30);
+  });
+
+  // Loyer
+  const rentWord=/(loyer|lou[ée]e?s?\b|locataire|bail|revenus? locatifs?|location)/;
+  const cands=[];
+  for(const x of amounts){
+    const annual=/^\s*(?:hc|cc|charges comprises|hors charges)?\s*(?:\/\s*an\b|par an|annuel|l'an)/.test(x.after)||/annuel/.test(x.before);
+    const monthly=/^\s*(?:hc|cc|hors charges|charges comprises|\/\s*mois|par mois|mensuel)/.test(x.after)||/mensuel/.test(x.before);
+    const ctx=rentWord.test(x.before.slice(-35));
+    if(/(charges? de copro|taxe|honoraires|frais|prix|travaux)/.test(x.before.slice(-25))) continue;
+    if(annual&&ctx&&x.n>=1200&&x.n<=200000) cands.push({v:x.n/12,score:3,idx:x.idx});
+    else if(!annual&&(ctx||monthly)&&x.n>=100&&x.n<=15000) cands.push({v:x.n,score:(ctx?2:0)+(monthly?1:0),idx:x.idx});
+  }
+  cands.sort((a,b)=>b.score-a.score||a.idx-b.idx);
+  if(cands.length) res.loyer=Math.round(cands[0].v);
+  const loyerIdx=cands.length?cands[0].idx:-1;
+
+  // Prix
+  const bad=/(taxe|charges|frais|honoraires|loyer|revenu|copro|travaux|m²|m2|par mois|mensuel|annuel)/;
+  const big=amounts.filter(x=>x.n>=15000&&x.idx!==loyerIdx&&!/^\s*(?:\/\s*m|le m|par m)/.test(x.after)&&!/(annuel|par an|\/\s*an)/.test(x.after.slice(0,12)));
+  let p=big.find(x=>/prix|vente|vendu|propos/.test(x.before.slice(-25)))||big.find(x=>!bad.test(x.before.slice(-25)))||big[0];
+  if(p) res.prix=Math.round(p.n);
+
+  // Surface Carrez
+  let c=flat.match(/carrez[^0-9]{0,30}(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m\b|mètres)/i)
+      ||flat.match(/(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m\b|mètres? carrés?)\s*\(?\s*(?:en\s+|selon\s+(?:la\s+)?)?(?:loi\s+)?carrez/i);
+  if(c){ res.carrez=toNum(c[1]); res.surfaceSource='carrez'; }
+  else{
+    c=flat.match(/surface(?: habitable)?\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m\b)/i)
+      ||flat.match(/\b(\d+(?:[.,]\d+)?)\s*(?:m²|m2)/i);
+    if(c){ const n=toNum(c[1]); if(n>=9&&n<=2000){ res.carrez=n; res.surfaceSource='habitable'; } }
+  }
+
+  // Statut locatif
+  const strong=[/locataires?\s+en\s+place/i,/vendu\s+lou[ée]e?s?/i,/vendu\s+occup[ée]e?/i,/vente\s+occup[ée]e?/i,/bail\s+en\s+cours/i,
+    /actuellement\s+lou[ée]e?s?/i,/lou[ée]e?s?\s+actuellement/i,/(?:est|sont)\s+(?:actuellement\s+)?lou[ée]e?s?/i,/lou[ée]e?s?\s+depuis/i,
+    /lou[ée]e?s?\s+(?:à|a|pour)?\s*\d/i,/occup[ée]e?\s+par\s+(?:un|une|des|le|la|son|sa|ses)\s+locataires?/i,
+    /avec\s+(?:son|ses|un|une|le|la|les)\s+locataires?/i,/loyer\s+actuel/i,/en\s+cours\s+de\s+location/i,
+    /bail\s+(?:commercial|d['’]habitation|meublé|3\s*\/\s*6\s*\/\s*9|de\s+\d)/i,/locataires?\s+(?:depuis|sérieux|fiable|stable|en\s+poste)/i];
+  const weak=[/investissement\s+locatif/i,/id[ée]al\s+investisseurs?/i,/rentabilit[ée]/i,/\bloyer\b/i,/rendement/i,/pour\s+investisseurs?/i];
+  const neg=[/libre\s+de\s+(?:toute\s+occupation|tout\s+locataire|toute\s+location|suite|d['’]occupation)/i,/vendu\s+libre/i,
+    /libre\s+(?:à|a)\s+la\s+(?:vente|signature)/i,/libre\s+(?:dès|des)\s+(?:la\s+)?(?:signature|vente)/i,/bien\s+libre/i];
+  const hit=list=>{ for(const r of list){ const mm=flat.match(r); if(mm) return mm; } return null; };
+  const s=hit(strong), n=hit(neg), w=hit(weak), vi=flat.match(/viager/i);
+  if(vi&&!s){ res.loyer=null; res.statut='viager'; res.preuve=snippet(flat,vi.index,vi[0].length); }
+  else if(s&&n){ res.statut='verifier'; res.preuve=snippet(flat,s.index,s[0].length); }
+  else if(s){ res.statut='loue'; res.preuve=snippet(flat,s.index,s[0].length); }
+  else if(n){ res.statut='libre'; res.preuve=snippet(flat,n.index,n[0].length); }
+  else if(w){ res.statut='verifier'; res.preuve=snippet(flat,w.index,w[0].length); }
+
+  // Bail
+  const b=flat.match(/(fin\s+(?:du\s+|de\s+)?bail|bail[^.;\n]{0,15}?jusqu['’]?\s*(?:au|en|à|a)|bail\s+(?:jusqu['’]?\s*(?:au|en|à|a)|se\s+termin\w*|expir\w*|court\s+jusqu\w*|renouvel\w*)|[ée]ch[ée]ance\s+(?:du\s+)?bail|bail\s+(?:commercial|meublé|3\s*\/\s*6\s*\/\s*9))[^.;!\n]{0,45}/i);
+  if(b) res.finBail=b[0].trim().replace(/\s+/g,' ');
+
+  return res;
+}
+function rentaClass(r){
+  if(r==null||!isFinite(r)) return null;
+  if(r>=10) return 'A'; if(r>=8) return 'B'; if(r>=7) return 'C'; if(r>=6) return 'D';
+  if(r>=5) return 'E'; if(r>=4) return 'F'; return 'G';
+}
+/* PARSER END */
+
+(function(){
+  const $=id=>document.getElementById(id);
+  const fmt=(n,d=0)=>n==null||!isFinite(n)?'–':n.toLocaleString('fr-FR',{maximumFractionDigits:d,minimumFractionDigits:d});
+  const KEY='vendu-loue-v1';
+  const CLASSES=[
+    {k:'A',label:'10 % et plus',color:'var(--a)'},
+    {k:'B',label:'8 à 10 %',color:'var(--b)'},
+    {k:'C',label:'7 à 8 %',color:'var(--c)',dark:true},
+    {k:'D',label:'6 à 7 %',color:'var(--d)',dark:true},
+    {k:'E',label:'5 à 6 %',color:'var(--e)',dark:true},
+    {k:'F',label:'4 à 5 %',color:'var(--f)'},
+    {k:'G',label:'moins de 4 %',color:'var(--g)'}
+  ];
+  const cls=k=>CLASSES.find(c=>c.k===k);
+
+  // ---------- Stockage ----------
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ return []; } }
+  function save(l){ try{ localStorage.setItem(KEY,JSON.stringify(l)); }catch(e){} }
+  let items=load();
+
+  // ---------- Radar ----------
+  const KEYWORDS=['locataire en place','vendu loué','bail en cours','actuellement loué','vendu occupé','investissement locatif'];
+  function buildLinks(){
+    const ville=$('ville').value.trim();
+    const budget=toNum($('budget').value);
+    $('chips').innerHTML='';
+    KEYWORDS.forEach(k=>{
+      const u=new URL('https://www.leboncoin.fr/recherche');
+      u.searchParams.set('category','9');
+      u.searchParams.set('text',k);
+      if(ville) u.searchParams.set('locations',ville);
+      if(budget) u.searchParams.set('price','min-'+Math.round(budget));
+      const a=document.createElement('a');
+      a.className='chip'; a.href=u.toString(); a.target='_blank'; a.rel='noopener'; a.textContent=k;
+      $('chips').appendChild(a);
+    });
+    try{ localStorage.setItem(KEY+'-radar',JSON.stringify({ville:$('ville').value,budget:$('budget').value})); }catch(e){}
+  }
+  try{ const r=JSON.parse(localStorage.getItem(KEY+'-radar')); if(r){ $('ville').value=r.ville||''; $('budget').value=r.budget||''; } }catch(e){}
+  $('ville').addEventListener('input',buildLinks);
+  $('budget').addEventListener('input',buildLinks);
+  buildLinks();
+
+  // ---------- Échelle ----------
+  CLASSES.forEach((c,i)=>{
+    const rung=document.createElement('div');
+    rung.className='rung'; rung.dataset.k=c.k;
+    rung.innerHTML='<div class="bar'+(c.dark?' dark':'')+'" style="background:'+c.color+';width:'+(46+i*7)+'%"><span>'+c.label+'</span><i>'+c.k+'</i></div><span class="val"></span>';
+    $('ladder').appendChild(rung);
+  });
+
+  // ---------- Analyse ----------
+  const STATUTS={
+    loue:{t:'Vendu avec locataire',c:'s-loue'},
+    verifier:{t:'Peut-être loué, à vérifier',c:'s-verifier'},
+    libre:{t:'Vendu libre, sans locataire',c:'s-libre'},
+    viager:{t:'Viager : occupé par le vendeur, pas par un locataire',c:'s-viager'},
+    none:{t:'Aucun locataire mentionné',c:'s-none'}
+  };
+  let current=null;
+
+  function setStatut(st,preuve){
+    const s=STATUTS[st]||STATUTS.none;
+    $('statut').className='status '+s.c;
+    $('statut').querySelector('strong').textContent=s.t;
+    const q=$('statut').querySelector('q');
+    q.textContent=preuve||''; q.hidden=!preuve;
+  }
+  function compute(){
+    const prix=toNum($('r-prix').value), carrez=toNum($('r-carrez').value), loyer=toNum($('r-loyer').value);
+    const m2=prix&&carrez?prix/carrez:null;
+    const an=loyer?loyer*12:null;
+    const renta=prix&&loyer?loyer*12/prix*100:null;
+    $('o-m2').textContent=m2?fmt(m2)+' €':'–';
+    $('o-an').textContent=an?fmt(an)+' €':'–';
+    const k=rentaClass(renta);
+    document.querySelectorAll('.rung').forEach(r=>{
+      const on=r.dataset.k===k;
+      r.classList.toggle('on',on||!k);
+      r.querySelector('.val').textContent=on?fmt(renta,1)+' %':'';
+    });
+    return {prix,carrez,loyer,m2,renta,classe:k};
+  }
+  ['r-prix','r-carrez','r-loyer'].forEach(id=>$(id).addEventListener('input',compute));
+
+  $('analyser').addEventListener('click',()=>{
+    const r=parseAnnonce($('texte').value);
+    current=r;
+    $('r-titre').value=r.titre;
+    $('r-prix').value=r.prix!=null?r.prix:'';
+    $('r-carrez').value=r.carrez!=null?String(r.carrez).replace('.',','):'';
+    $('r-loyer').value=r.loyer!=null?r.loyer:'';
+    $('r-ville').value=r.ville;
+    $('r-bail').value=r.finBail;
+    $('l-carrez').textContent=r.surfaceSource==='habitable'?'Surface (Carrez non précisée)':'Surface Carrez (m²)';
+    if(!$('texte').value.trim()) setStatut('none','Colle le texte d\u2019une annonce, ou remplis les champs à la main.');
+    else setStatut(r.statut,r.preuve);
+    $('resultat').hidden=false;
+    compute();
+    $('statut').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+  });
+
+  $('ajouter').addEventListener('click',()=>{
+    const c=compute();
+    const it={
+      id:Date.now().toString(36),
+      titre:$('r-titre').value.trim()||'Annonce sans titre',
+      ville:$('r-ville').value.trim(),
+      lien:$('lien').value.trim(),
+      bail:$('r-bail').value.trim(),
+      statut:current?current.statut:'none',
+      prix:c.prix,carrez:c.carrez,loyer:c.loyer,m2:c.m2,renta:c.renta,classe:c.classe,
+      surfaceSource:current?current.surfaceSource:null,
+      ajout:new Date().toISOString()
+    };
+    items.push(it); save(items); render();
+    $('texte').value=''; $('lien').value=''; $('resultat').hidden=true; current=null;
+    $('t-liste').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+  });
+
+  // ---------- Liste ----------
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function render(){
+    const sorted=[...items].sort((a,b)=>(b.renta??-1)-(a.renta??-1));
+    $('liste').innerHTML='';
+    $('vide').hidden=sorted.length>0;
+    $('export').hidden=sorted.length===0;
+    $('count').textContent=sorted.length?sorted.length+(sorted.length>1?' annonces, classées par rentabilité':' annonce'):'';
+    sorted.forEach(it=>{
+      const c=cls(it.classe);
+      const el=document.createElement('article');
+      el.className='item';
+      const st=STATUTS[it.statut]||STATUTS.none;
+      el.innerHTML=
+        '<div class="tag'+(c?(c.dark?' dark':''):' none')+'" style="'+(c?'background:'+c.color:'')+'" aria-label="Classe de rentabilité '+(it.classe||'inconnue')+'">'+(it.classe||'?')+'</div>'+
+        '<div><h3>'+esc(it.titre)+'</h3>'+
+        '<p class="meta">'+esc([it.ville,st.t].filter(Boolean).join(', '))+'</p>'+
+        '<div class="nums">'+
+          '<span><b>'+fmt(it.prix)+' €</b></span>'+
+          '<span><b>'+(it.carrez?fmt(it.carrez,it.carrez%1?1:0)+' m²':'– m²')+'</b>'+(it.surfaceSource==='habitable'?' (hors Carrez)':'')+'</span>'+
+          '<span>'+(it.m2?fmt(it.m2)+' €/m²':'')+'</span>'+
+          '<span>'+(it.loyer?'Loyer '+fmt(it.loyer)+' €':'Loyer inconnu')+'</span>'+
+          '<span><b>'+(it.renta?fmt(it.renta,1)+' %':'')+'</b></span>'+
+        '</div>'+
+        (it.bail?'<p class="meta" style="margin:6px 0 0">'+esc(it.bail)+'</p>':'')+
+        '<div class="links">'+(it.lien?'<a href="'+esc(it.lien)+'" target="_blank" rel="noopener">Voir l\u2019annonce</a>':'')+
+        '<button type="button" data-del="'+it.id+'">Retirer</button></div></div>';
+      $('liste').appendChild(el);
+    });
+  }
+  $('liste').addEventListener('click',e=>{
+    const btn=e.target.closest('[data-del]'); if(!btn) return;
+    if(btn.dataset.armed){ const id=btn.getAttribute('data-del'); items=items.filter(i=>i.id!==id); save(items); render(); return; }
+    btn.dataset.armed='1'; btn.textContent='Confirmer le retrait';
+    setTimeout(()=>{ if(btn.isConnected){ delete btn.dataset.armed; btn.textContent='Retirer'; } },4000);
+  });
+  $('export').addEventListener('click',()=>{
+    const head=['Titre','Ville','Statut','Prix','Surface m²','Surface Carrez','Prix/m²','Loyer mensuel','Rentabilité brute %','Classe','Bail','Lien'];
+    const rows=[...items].sort((a,b)=>(b.renta??-1)-(a.renta??-1)).map(i=>[
+      i.titre,i.ville,(STATUTS[i.statut]||STATUTS.none).t,i.prix??'',i.carrez??'',i.surfaceSource==='carrez'?'oui':'non',
+      i.m2?Math.round(i.m2):'',i.loyer??'',i.renta?i.renta.toFixed(1).replace('.',','):'',i.classe||'',i.bail,i.lien
+    ]);
+    const tsv=[head,...rows].map(r=>r.map(v=>String(v).replace(/[\t\n]/g,' ')).join('\t')).join('\n');
+    const btn=$('export');
+    const done=t=>{ btn.textContent=t; setTimeout(()=>btn.textContent='Copier le tableau',2500); };
+    try{
+      navigator.clipboard.writeText(tsv).then(()=>done('Copié, colle-le dans un tableur'),()=>fallback());
+    }catch(e){ fallback(); }
+    function fallback(){
+      const ta=document.createElement('textarea'); ta.value=tsv; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+      ta.remove(); done(ok?'Copié, colle-le dans un tableur':'Copie impossible ici');
+    }
+  });
+  render();
+})();
+</script>
+</body>
+</html>
