@@ -116,3 +116,21 @@
 
 @media (max-width: 560px) { .eq-row { grid-template-columns: 1fr 1fr; } .eq-row > :last-child { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { .eq-speaking .eq-avatar::before, .eq-speaking .eq-avatar::after { animation: none; } }
+
+/* Le moment présent : ce que le joueur doit faire, en grand */
+.eq-now { margin-top: 22px; padding: 18px; border-radius: 14px; border: 1px solid var(--brass); background: var(--cellar-2); display: grid; gap: 6px; }
+.eq-now-env { margin: 0; font: italic 500 24px/1.15 var(--f-display); color: var(--brass); }
+.eq-missions { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 16px; font-weight: 600; }
+
+/* Grill et appel collectif, côté animateur */
+.eq-grill { display: grid; gap: 10px; padding: 18px; border-radius: 14px; background: var(--cellar-2); border: 1px solid var(--line); }
+.eq-grill-who { font: italic 500 clamp(28px, 6vw, 40px)/1.05 var(--f-display); margin: 0; }
+.eq-grill-time { font: 700 clamp(44px, 12vw, 72px)/1 var(--f-type); font-variant-numeric: tabular-nums; color: var(--brass); }
+.eq-grill-time.low { color: var(--hang); }
+.eq-tokens { display: flex; gap: 6px; align-items: center; }
+.eq-tokens i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--brass); }
+.eq-tokens i.full { background: var(--brass); }
+.eq-callbox { position: relative; display: grid; gap: 10px; padding: 16px; border-radius: 14px; background: radial-gradient(120% 90% at 50% 0%, #3a1a24 0%, var(--cellar-2) 70%); border: 1px solid var(--line); }
+.eq-callbox .eq-log { max-height: 340px; padding: 6px 0; }
+.eq-callbox.eq-speaking .eq-avatar::before { animation: eq-ring 1.6s ease-out infinite; }
+.eq-callbox.eq-speaking .eq-avatar::after { animation: eq-ring 1.6s ease-out .8s infinite; }

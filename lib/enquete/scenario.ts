@@ -17,7 +17,10 @@ export type Character = {
   secret: string; // la vérité que tu caches
   objectives: string[];
   clues: { act: "acte2"; text: string }[];
+  missions: Mission[]; // à réussir en parlant, autour de la table : 1 point chacune
 };
+
+export type Mission = { id: string; act: "acte1" | "acte2" | "acte3"; text: string };
 
 export type Npc = {
   id: NpcId;
@@ -26,7 +29,7 @@ export type Npc = {
   initials: string;
   voice: string; // voix OpenAI
   tone: string; // façon de parler, pour la voix
-  unlock: ActId | "surprise";
+  unlock: ActId;
   sheet: string; // fiche pour l'IA
 };
 
@@ -54,6 +57,13 @@ export const CHARACTERS: Character[] = [
       { act: "acte2", text: "En sortant de la chambre froide à 23 h 21, tu as entendu quelqu'un remonter l'escalier de la cave en courant, et il flottait une odeur de cigare. Paul Vidal fume le cigare." },
       { act: "acte2", text: "En partant, tu as vu le ticket de la table 7 posé près de la caisse : réglé à 23 h 05, servi par Marc. Or Marc dit qu'il a servi cette table jusqu'à 23 h 30." },
     ],
+    missions: [
+      { id: "l1", act: "acte1", text: "Pendant ton passage sur le grill, ne laisse personne découvrir que tu t'es disputée avec ton père." },
+      { id: "l2", act: "acte1", text: "Fais dire à Hélène quel était son vrai lien avec ton père." },
+      { id: "l3", act: "acte2", text: "Fais admettre à Marc qu'il a quitté la salle avant 23 h 30." },
+      { id: "l4", act: "acte2", text: "Pendant l'appel au témoin, fais poser ta question par le groupe." },
+      { id: "l5", act: "acte3", text: "Convaincs au moins un autre joueur de voter pour le même suspect que toi." },
+    ],
   },
   {
     id: "marc",
@@ -72,6 +82,13 @@ export const CHARACTERS: Character[] = [
     clues: [
       { act: "acte2", text: "Danger : Inès t'a vu te laver les mains à la plonge vers 23 h 15. Si quelqu'un l'appelle, elle risque de parler. Prépare une explication (une bouteille cassée en salle ?)." },
       { act: "acte2", text: "Hélène Roussel n'est pas partie à 23 h comme elle le prétend : tu l'as aperçue dans le petit salon privé, au bout du couloir de la cave. A-t-elle vu quelque chose ? Retourne ça contre elle." },
+    ],
+    missions: [
+      { id: "m1", act: "acte1", text: "Fais dire à voix haute que Lucie s'est disputée avec son père ce soir." },
+      { id: "m2", act: "acte1", text: "Ne prononce jamais le mot « Margaux » de toute la soirée." },
+      { id: "m3", act: "acte2", text: "Fais accuser quelqu'un d'autre que toi, à voix haute, par au moins un joueur." },
+      { id: "m4", act: "acte2", text: "Fais en sorte que le groupe n'appelle pas Inès en premier." },
+      { id: "m5", act: "acte3", text: "Fais changer d'avis un joueur juste avant le vote." },
     ],
   },
   {
@@ -92,6 +109,13 @@ export const CHARACTERS: Character[] = [
       { act: "acte2", text: "Au dessert, Victor t'a glissé, l'air sombre : « J'ai enfin compris qui me vole depuis des années. Je règle ça ce soir. »" },
       { act: "acte2", text: "Pendant ton appel, par la porte entrouverte du salon, tu as vu Marc remonter de la cave vers 23 h 13, sans son tablier. Mais pour le dire, il faut avouer que tu étais encore là." },
     ],
+    missions: [
+      { id: "h1", act: "acte1", text: "Fais avouer à Lucie qu'elle n'est pas partie à 22 h 45." },
+      { id: "h2", act: "acte1", text: "Ne laisse personne découvrir ta liaison avec Victor pendant l'acte 1." },
+      { id: "h3", act: "acte2", text: "Fais dire à Marc à quelle heure il est descendu à la cave." },
+      { id: "h4", act: "acte2", text: "Fais poser au témoin une question sur le sommelier." },
+      { id: "h5", act: "acte3", text: "Révèle ce que tu as vu à 23 h 13 avant le vote, sans qu'on te le demande." },
+    ],
   },
   {
     id: "paul",
@@ -110,6 +134,13 @@ export const CHARACTERS: Character[] = [
     clues: [
       { act: "acte2", text: "Le tablier que tu as vu derrière les casiers était un tablier de sommelier, en cuir. Mais si tu le dis, tu avoues que tu es descendu à la cave." },
       { act: "acte2", text: "Le mail de Victor (22 h 58) est dans ton téléphone : « La cave ne vaut pas ce qu'on croyait, plusieurs bouteilles sont fausses. » Quelqu'un truquait la cave. Qui avait accès aux bouteilles ?" },
+    ],
+    missions: [
+      { id: "p1", act: "acte1", text: "Fais dire à Hélène pourquoi elle est restée après le dessert." },
+      { id: "p2", act: "acte1", text: "Pendant ton passage sur le grill, ne dis jamais que tu es descendu à la cave." },
+      { id: "p3", act: "acte2", text: "Fais dire à quelqu'un qui avait accès aux bouteilles de la cave." },
+      { id: "p4", act: "acte2", text: "Convaincs un joueur que Lucie avait un mobile." },
+      { id: "p5", act: "acte3", text: "Révèle le tablier de sommelier avant le vote." },
     ],
   },
 ];
@@ -145,7 +176,7 @@ CE QUE TU SAIS (ne le donne que si on te pose la bonne question) :
     initials: "BC",
     voice: "ash",
     tone: "Notaire retraité de 68 ans, bavard, pompeux, très sûr de lui, ravi qu'on l'écoute. Il prend son temps et savoure ses phrases.",
-    unlock: "surprise",
+    unlock: "acte2",
     sheet: `Tu es Benoît Carrel, 68 ans, notaire à la retraite, grand amateur de vin. Tu dînais table 12 avec ton épouse.
 CE QUE TU SAIS (ne le donne que si on te pose la bonne question) :
 - Vers 22 h 50, le sommelier Marc t'a apporté un Château Margaux 1990, très cher. Tu l'as goûté : « de la piquette, une honte ». Tu l'as renvoyé.
@@ -174,35 +205,56 @@ QUAND TU CRAQUES : tu n'avoues être descendu à la cave que si on te parle de l
 export const npcPrompt = (n: Npc) => `${NPC_RULES}\n\nL'AFFAIRE : ${FACTS}\n\n${n.sheet}`;
 
 export const ACTS: { id: ActId; title: string; hint: string }[] = [
-  { id: "invitation", title: "Invitations", hint: "À envoyer quelques jours avant : chacun découvre son personnage et son costume." },
-  { id: "acte1", title: "Acte 1 · Le drame (15 min)", hint: "Top départ. Faites parler le commissaire, chacun lit son dossier secret (3 min), puis tour de table : chacun se présente et donne sa version." },
-  { id: "acte2", title: "Acte 2 · Les langues se délient (25 min)", hint: "Chacun reçoit deux indices sur les autres. Questions libres, alliances, appels aux témoins. Un témoin surprise se manifeste 10 minutes plus tard." },
-  { id: "acte3", title: "Acte 3 · Le rapport du labo (10 min)", hint: "Le commissaire lit le rapport du labo. Dernières accusations, puis chacun vote sur sa page." },
-  { id: "revelation", title: "Révélation (5 min)", hint: "Quand tout le monde a voté. Le commissaire révèle la vérité à voix haute." },
+  { id: "invitation", title: "Invitations", hint: "Quelques jours avant : chacun découvre son personnage et son costume. Imprimez les pièces et préparez les enveloppes 2 et 3." },
+  { id: "acte1", title: "Acte 1 · Le drame (15 min)", hint: "Faites parler le commissaire. Chacun lit son dossier (2 min) et se présente avec sa phrase. Puis lancez le grill : 2 minutes chacun sur la sellette, les autres posent les questions." },
+  { id: "acte2", title: "Acte 2 · Les langues se délient (25 min)", hint: "Ouvrez l'enveloppe 2 au centre de la table. Chacun reçoit 2 infos secrètes et 2 nouvelles missions. Débat libre, appel au témoin sur haut-parleur (4 questions), puis second tour de grill." },
+  { id: "acte3", title: "Acte 3 · Le rapport du labo (15 min)", hint: "Ouvrez l'enveloppe 3. Dernier appel au témoin. Puis chacun accuse à voix haute, une minute chacun, et tout le monde vote sur son téléphone." },
+  { id: "revelation", title: "Révélation (5 min)", hint: "Quand tout le monde a voté. Le commissaire révèle la vérité, puis le classement s'affiche." },
 ];
 
-export const SURPRISE_DELAY_MIN = 10;
+// Le grill : chaque joueur passe sur la sellette, les autres le questionnent
+export const GRILL_SECONDS = 120;
+
+// Appels au témoin : un par acte, sur le haut-parleur de l'animateur, 4 questions maximum
+export const CALL_ACTS = ["acte2", "acte3"] as const;
+export const QUESTIONS_PER_CALL = 4;
+
+// Points
+export const POINTS = { mission: 1, culprit: 3, motive: 1, killerEscapes: 4 };
+
+// Pièces à conviction, imprimées et glissées dans des enveloppes
+export type Evidence = { envelope: 2 | 3; id: string; kind: "ticket" | "badge" | "sms" | "labo" | "note"; title: string; lines: string[] };
+export const EVIDENCE: Evidence[] = [
+  { envelope: 2, id: "ticket", kind: "ticket", title: "Ticket de caisse · table 7", lines: ["L'ARMAND · TOULOUSE", "Table 7 · 2 couverts", "Menu anniv. x2 ...... 290,00", "Champagne x2 ......... 36,00", "TOTAL ............. 326,00 EUR", "Réglé par carte · 23:05", "Serveur : M. DELORME"] },
+  { envelope: 2, id: "badge", kind: "badge", title: "Relevé des badges · chambre froide", lines: ["22:14  ENTRÉE  CUISINE (commis)", "22:31  SORTIE  CUISINE (commis)", "22:52  ENTRÉE  L. ARMAND", "23:21  SORTIE  L. ARMAND", "Aucun autre passage jusqu'à minuit."] },
+  { envelope: 2, id: "sms", kind: "sms", title: "Téléphone de la victime · dernier SMS reçu", lines: ["De : H.", "Samedi 22:47", "Lundi, tout le monde saura. Tu l'auras cherché."] },
+  { envelope: 3, id: "labo", kind: "labo", title: "Rapport du laboratoire de police scientifique", lines: [
+    "La bouteille brisée près du corps est un faux Château Margaux 1990 : étiquette imprimée au laser, vin de table à l'intérieur.",
+    "L'encre correspond à l'imprimante du petit bureau de la cave.",
+    "Le coup a été porté avec un magnum vide, retrouvé sous l'escalier.",
+    "Heure de la mort : entre 23 h 05 et 23 h 20.",
+  ] },
+  { envelope: 3, id: "note", kind: "note", title: "Note du commissaire · le bureau de la cave", lines: ["Le petit bureau de la cave ferme à clé.", "Il existe deux clés. L'une était dans la poche de Victor.", "La seconde n'a pas été retrouvée sur les lieux.", "Qui d'autre avait une raison d'entrer dans ce bureau, tous les soirs ?"] },
+];
 
 export const COMMISSAIRE = {
   voice: "cedar",
   tone: "Vieux commissaire de police français, voix grave, lente, fatiguée, un peu ironique. Il marque des pauses, comme s'il fumait entre deux phrases.",
-  acte1: "Mesdames, messieurs… Commissaire Garnier, police judiciaire de Toulouse. Ce soir, à vingt-trois heures quarante, Victor Armand a été retrouvé mort dans sa cave. Frappé à la tête. Vous étiez quatre, ce soir, autour de lui. Quatre à avoir une raison de lui en vouloir. Personne ne quitte cette pièce. Vous allez parler, chacun votre tour. Et je vous préviens : l'un d'entre vous ment pour couvrir un meurtre.",
-  acte2: "C'est encore moi. Les langues commencent à se délier, et j'ai reçu des choses… intéressantes. Regardez vos téléphones. Et si j'étais vous, j'appellerais Inès, la plongeuse. C'est elle qui a trouvé le corps.",
-  acte3: "Le labo vient de rendre son rapport. La bouteille brisée près du corps est un faux Margaux 1990. L'étiquette a été imprimée sur l'imprimante du petit bureau de la cave… et seules deux clés ouvrent ce bureau. Victor est mort entre vingt-trois heures cinq et vingt-trois heures vingt. Vous avez dix minutes. Ensuite, vous votez.",
+  acte1: "Mesdames, messieurs… Commissaire Garnier, police judiciaire. Ce soir, à vingt-trois heures quarante, Victor Armand a été retrouvé mort dans sa cave. Frappé à la tête. Vous étiez là, tous. Et chacun de vous avait une raison de lui en vouloir. Regardez votre téléphone, lisez votre dossier, et gardez-le pour vous. Ensuite, chacun passera sur le grill. Deux minutes. Les autres poseront les questions. Et je vous préviens : l'un d'entre vous ment pour couvrir un meurtre.",
+  acte2: "C'est encore moi. J'ai fait saisir quelques pièces. Ouvrez l'enveloppe numéro deux et posez tout sur la table. Chacun de vous vient aussi de recevoir des informations… à vous de voir à qui vous les confiez. Et un témoin accepte de vous parler. Un seul appel. Quatre questions. Choisissez-les bien.",
+  acte3: "Le labo a parlé. Ouvrez la dernière enveloppe. Vous avez droit à un dernier appel, quatre questions. Puis chacun d'entre vous accusera, à voix haute, les yeux dans les yeux. Ensuite… vous votez.",
 };
 
 // SMS courts et sans caractères spéciaux : chaque segment de SMS est facturé
 export const SMS = {
   invitation: (c: Character, link: string) =>
-    `L'Armand, samedi soir : un meurtre sera commis. Tu joues ${c.name}, ${c.role.toLowerCase()}. Ton dossier et ton costume : ${link}`,
+    `L'Armand, samedi soir : un meurtre sera commis. Tu joues ${c.name}, ${c.role.toLowerCase()}. Ton costume : ${link}`,
   acte1: (c: Character, link: string) =>
-    `ACTE 1 - Confidentiel. ${c.name.split(" ")[0]}, ton dossier secret est ouvert. Ne le montre a personne : ${link}`,
+    `ACTE 1 - ${c.name.split(" ")[0]}, ton dossier secret et tes 2 missions. Ne montre rien a personne : ${link}`,
   acte2: (c: Character, link: string) =>
-    `ACTE 2 - Pour toi seul. ${c.clues.map((k, i) => `${i + 1}) ${k.text}`).join(" ")} Temoins : ${link}`,
-  surprise: (link: string) =>
-    `Commissaire Garnier : M. Carrel, client de la table 12, veut parler. Appelez-le : ${link}`,
-  acte3: (link: string) =>
-    `ACTE 3 - Le rapport du labo est dans ton dossier. Vote avant le retour du commissaire : ${link}`,
+    `ACTE 2 - Ouvrez l'enveloppe 2. ${c.name.split(" ")[0]}, tu as 2 infos secretes et 2 nouvelles missions : ${link}`,
+  acte3: (c: Character, link: string) =>
+    `ACTE 3 - Ouvrez l'enveloppe 3. Derniere mission, puis vote : ${link}`,
 };
 
 export const LAB_REPORT = [
