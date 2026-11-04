@@ -46,6 +46,7 @@ export type Lead = {
   created?: string; // date de création (registre officiel des entreprises)
   legalName?: string; // nom officiel trouvé dans le registre, pour vérifier la correspondance
   registry?: "ok" | "none"; // recherche dans le registre faite
+  details?: Details; // avis chargés une fois (1 requête), gardés ensuite
   email?: string; // e-mail de contact (trouvé sur son site ou saisi à la main)
   emailOthers?: string[]; // autres adresses trouvées
   emailChecked?: boolean; // recherche automatique déjà faite
@@ -124,6 +125,8 @@ export type ScanResult = {
   audited: number; // sites analysés
   calls: number; // requêtes Google facturées
   demo: boolean;
+  next?: string; // jeton Google pour les 20 résultats suivants
+  cachedAt?: string; // résultat repris du cache local (aucune requête)
 };
 
 export type Details = {

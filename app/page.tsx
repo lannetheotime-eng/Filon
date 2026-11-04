@@ -217,7 +217,7 @@ export default function Home() {
   const todayKey = new Date().toISOString().slice(0, 10);
   const usedToday = localUsage.day === todayKey ? localUsage.today : 0;
   const cap = profile.dailyCap ?? 30;
-  const scanCost = byName ? 1 : deep && !around.trim() ? 27 : 3;
+  const scanCost = byName ? 1 : deep && !around.trim() ? 27 : 1;
   const live = !!me?.google;
 
   function spend(n: number) {
@@ -257,9 +257,24 @@ export default function Home() {
     setRegProgress(null);
   }
 
-  async function runScan(c = city, t = tradeId) {
+  // Cache local des recherches : la même recherche dans les 7 jours ne coûte aucune requête
+  const [scanCache, setScanCache] = usePersistent<Record<string, ScanResult & { cachedAt: string }>>("filon.cache", {});
+  const cacheKey = (c: string, t: string) => [t, c.trim().toLowerCase(), byName ? `nom:${bizName.trim().toLowerCase()}` : "", includeOld || isArt(t), includeAll || isArt(t), deep, around.trim().toLowerCase(), around.trim() ? radius : ""].join("|");
+  const [moreLoading, setMoreLoading] = useState(false);
+
+  async function runScan(c = city, t = tradeId, force = false) {
+    const key = cacheKey(c, t);
+    const hit = scanCache[key];
+    if (!force && hit && Date.now() - new Date(hit.cachedAt).getTime() < 7 * 864e5) {
+      setScope("last"); setError(""); setSelected([]);
+      // On reprend les fiches à jour (e-mails, audits) depuis la mémoire des entreprises
+      setResult({ ...hit, leads: hit.leads.map((l) => leads[l.id] || l) });
+      setKind("all"); setArtKind("all");
+      notify(`Recherche du ${new Date(hit.cachedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} reprise : 0 requête`);
+      return;
+    }
     if (!canSpend(scanCost)) {
-      setError(`Ce scan peut coûter jusqu'à ${scanCost} requêtes et il t'en reste ${Math.max(0, cap - usedToday)} aujourd'hui sur ton plafond de ${cap}. ${deep ? "Désactive le scan complet ou " : ""}Reviens demain pour rester dans le gratuit.`);
+      setError(`Ce scan peut coûter jusqu'à ${scanCost} requête${scanCost > 1 ? "s" : ""} et il t'en reste ${Math.max(0, cap - usedToday)} aujourd'hui sur ton plafond de ${cap}. ${deep ? "Désactive le scan complet ou " : ""}Reviens demain pour rester dans le gratuit.`);
       return;
     }
     setLoading(true);
@@ -280,6 +295,12 @@ export default function Home() {
       if (!j.demo && j.calls) spend(j.calls);
       enrichRegistry(j.leads as Lead[]);
       setResult(j);
+      if (!j.demo) setScanCache((prev) => {
+        const n = { ...prev, [key]: { ...j, cachedAt: new Date().toISOString() } };
+        const keys = Object.keys(n).sort((a, b) => n[b].cachedAt.localeCompare(n[a].cachedAt));
+        for (const k of keys.slice(30)) delete n[k]; // 30 recherches gardées au plus
+        return n;
+      });
       setKind("all");
       setArtKind("all");
       setLeads((prev) => {
@@ -293,6 +314,35 @@ export default function Home() {
     } finally {
       clearInterval(tick);
       setLoading(false);
+    }
+  }
+
+  // 20 résultats de plus sur la même recherche : une seule requête
+  async function moreResults() {
+    const cur = lastResult;
+    if (!cur?.next) return;
+    if (!canSpend(1)) { setError(`Plafond de ${cap} requêtes atteint aujourd'hui : reviens demain pour rester dans le gratuit.`); return; }
+    setMoreLoading(true);
+    try {
+      const r = await fetch("/api/scan", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ city: city, tradeId: cur.tradeId, deep: false, includeOld: includeOld || isArt(cur.tradeId), includeAll: includeAll || isArt(cur.tradeId), around: around.trim() || undefined, radius, pageToken: cur.next }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      if (!j.demo && j.calls) spend(j.calls);
+      enrichRegistry(j.leads as Lead[]);
+      const fresh = (j.leads as Lead[]).filter((l) => !cur.leads.some((x) => x.id === l.id));
+      const merged: ScanResult = { ...cur, leads: [...cur.leads, ...fresh], scanned: cur.scanned + j.scanned, withSite: cur.withSite + j.withSite, calls: cur.calls + j.calls, next: j.next };
+      setResult(merged);
+      const key = cacheKey(city, cur.tradeId);
+      setScanCache((prev) => ({ ...prev, [key]: { ...merged, cachedAt: prev[key]?.cachedAt || new Date().toISOString() } }));
+      setLeads((prev) => { const n = { ...prev }; for (const l of fresh) n[l.id] = l; return n; });
+      notify(`${fresh.length} entreprise${fresh.length > 1 ? "s" : ""} de plus`);
+    } catch (e: any) {
+      setError(e.message || "Impossible de charger la suite.");
+    } finally {
+      setMoreLoading(false);
     }
   }
 
@@ -402,7 +452,7 @@ export default function Home() {
       id: `v-${v}`, group: "Aller à", label, run: () => setView(v),
     })),
     ...[...TRADES, ...ART_TRADES.filter((t) => !t.hidden)].map((t) => ({
-      id: `t-${t.id}`, group: t.art ? "Chercher des lieux pour tes tableaux" : "Chercher des clients", label: `${t.label} à ${city || "…"}`, hint: "1 à 3 requêtes",
+      id: `t-${t.id}`, group: t.art ? "Chercher des lieux pour tes tableaux" : "Chercher des clients", label: `${t.label} à ${city || "…"}`, hint: "1 requête",
       run: () => { setView("scan"); setTradeId(t.id); runScan(city, t.id); },
     })),
     ...Object.keys(pipeline).filter((id) => leads[id]).map((id) => ({
@@ -514,7 +564,7 @@ export default function Home() {
                 </label>
               </div>
             </details>}
-            {live && <span className="cost">{scanCost === 1 ? "1 requête" : scanCost <= 3 ? "1 à 3 requêtes" : `jusqu'à ${scanCost} requêtes`} · {me?.mode === "comptes" && me.usage ? `${me.usage.today}/${me.usage.dailyLimit} aujourd'hui` : `${Math.max(0, cap - usedToday)} restantes aujourd'hui`}</span>}
+            {live && <span className="cost">{scanCost === 1 ? "1 requête (0 si déjà faite cette semaine)" : `jusqu'à ${scanCost} requêtes`} · {me?.mode === "comptes" && me.usage ? `${me.usage.today}/${me.usage.dailyLimit} aujourd'hui` : `${Math.max(0, cap - usedToday)} restantes aujourd'hui`}</span>}
           </div>
           {error && <p className="error find-err">{error}</p>}
 
@@ -603,6 +653,7 @@ export default function Home() {
                 <h1><b>{result.leads.length}</b> {result.city.zone === "cumul" ? `entreprise${result.leads.length > 1 ? "s" : ""} trouvée${result.leads.length > 1 ? "s" : ""} au fil de tes recherches` : result.city.zone?.startsWith("Recherche") ? `résultat${result.leads.length > 1 ? "s" : ""} à ${result.city.name}` : `${trade.label.toLowerCase()} à ${result.city.name}`}</h1>
                 {artMode && <p className="eyebrow">Lieux pour tes tableaux · vente directe{priceText(profile) ? ` · ${priceText(profile)}` : ""}</p>}
                 <p className="hint">
+                  {scope === "last" && lastResult?.cachedAt && <>Recherche du {new Date(lastResult.cachedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}, sans nouvelle requête · <button className="linkish" onClick={() => runScan(city, lastResult.tradeId, true)}>Actualiser</button> · </>}
                   {result.city.zone === "cumul" ? `${allTrade ? getTrade(allTrade)?.label : "Tous métiers"} · ${allCity || "toutes villes"} · les plus récentes en premier` : <>{result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées</>}
                   {regProgress ? ` · ancienneté ${regProgress.done}/${regProgress.total}` : ""}{mailScan ? ` · e-mails ${mailScan.done}/${mailScan.total}` : ""}
                 </p>
@@ -708,6 +759,9 @@ export default function Home() {
                       <strong>Aucune entreprise avec ces filtres</strong>
                       Assouplis les filtres, ou cherche « Toutes ».
                     </div>
+                  )}
+                  {scope === "last" && lastResult?.next && (
+                    <button className="btn ghost" style={{ marginTop: 10 }} onClick={moreResults} disabled={moreLoading}>{moreLoading ? "Chargement…" : "Voir 20 entreprises de plus (1 requête)"}</button>
                   )}
                   <p className="attrib">Données des entreprises : Google. Analyse des sites : Filon.</p>
                 </div>

@@ -85,7 +85,7 @@ export default function LeadDrawer({
   }, [onClose]);
 
   useEffect(() => {
-    setDetails(null);
+    setDetails(lead.details || null);
     setDirs(null);
     setErr("");
     setTab("plan");
@@ -115,6 +115,7 @@ export default function LeadDrawer({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setDetails(j);
+      onLead({ details: j });
       if (!lead.id.startsWith("demo-")) onSpend(1);
     } catch (e: any) {
       setErr(e.message || "Impossible de récupérer les avis.");

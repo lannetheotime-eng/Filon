@@ -190,9 +190,9 @@ const FIELDS = [
   "nextPageToken",
 ].join(",");
 
-async function searchTile(key: string, query: string, tile: Tile, maxPages: number) {
+async function searchTile(key: string, query: string, tile: Tile, maxPages: number, startToken?: string) {
   const places: any[] = [];
-  let pageToken: string | undefined;
+  let pageToken: string | undefined = startToken;
   let calls = 0;
   for (let p = 0; p < maxPages; p++) {
     const body: any = { textQuery: query, languageCode: "fr", regionCode: "FR", pageSize: 20, locationRestriction: { rectangle: tile } };
@@ -213,10 +213,10 @@ async function searchTile(key: string, query: string, tile: Tile, maxPages: numb
     pageToken = json.nextPageToken;
     if (!pageToken) break;
   }
-  return { places, calls };
+  return { places, calls, next: pageToken };
 }
 
-export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false, includeAll = false, around?: { address: string; radius: number }): Promise<ScanResult> {
+export async function scan(cityQuery: string, tradeId: string, deep: boolean, includeOld = false, includeAll = false, around?: { address: string; radius: number }, pageToken?: string): Promise<ScanResult> {
   const trade = getTrade(tradeId);
   if (!trade) throw new Error("Métier inconnu.");
   const key = process.env.GOOGLE_PLACES_API_KEY;
@@ -240,12 +240,15 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
 
   const seen = new Map<string, any>();
   let calls = 0;
-  const ts = tiles(commune, deep && !zone);
-  // Requêtes par lots de 4 pour rester raisonnable
+  const ts = tiles(commune, deep && !zone && !pageToken);
+  // Économie : une seule page de 20 par recherche simple ; la suite à la demande (« 20 de plus »)
+  const single = ts.length === 1;
+  let next: string | undefined;
   for (let i = 0; i < ts.length; i += 4) {
-    const batch = await Promise.all(ts.slice(i, i + 4).map((t) => searchTile(key, `${trade.query} ${commune.nom}`, t, 3)));
+    const batch = await Promise.all(ts.slice(i, i + 4).map((t) => searchTile(key, `${trade.query} ${commune.nom}`, t, single ? 1 : 3, single ? pageToken : undefined)));
     for (const r of batch) {
       calls += r.calls;
+      if (single) next = r.next;
       for (const p of r.places) if (!seen.has(p.id)) seen.set(p.id, p);
     }
   }
@@ -321,7 +324,7 @@ export async function scan(cityQuery: string, tradeId: string, deep: boolean, in
   }
   addContext(leads, rivals, leads.length + withSite, withSite);
   leads.sort((a, b) => b.score - a.score);
-  return { city, tradeId, leads, scanned: leads.length + withSite, withSite, audited, calls, demo: false };
+  return { city, tradeId, leads, scanned: leads.length + withSite, withSite, audited, calls, demo: false, next };
 }
 
 // Recherche d'une entreprise précise par son nom (1 requête), quel que soit l'état de son site

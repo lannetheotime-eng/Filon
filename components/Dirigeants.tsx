@@ -4,7 +4,7 @@ import type { HoldingLead } from "../lib/holdings-shared";
 import { EFFECTIF, EFFECTIF_LABEL, NAF_LABEL, SECTORS, fmtEur, score, signals } from "../lib/holdings-shared";
 import { usePersistent, toCsv, download } from "../lib/store";
 
-type Track = { status: string; notes?: string; phone?: string; site?: string; at: string };
+type Track = { status: string; notes?: string; phone?: string; site?: string; noPhone?: boolean; at: string };
 const STATUS = ["À appeler", "Appelé", "À rappeler", "RDV", "Pas intéressé"];
 
 // Lit une réponse serveur sans planter si ce n'est pas du JSON (délai dépassé, page d'erreur…)
@@ -72,7 +72,8 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
       if (!r.ok) throw new Error(j.error);
       if (live && j.calls) spend(j.calls);
       if (j.phone) { setT(l.siren, { phone: j.phone, site: j.website, notes: track[l.siren]?.notes || (j.via ? `Téléphone de ${j.via}` : undefined) }); notify(`Téléphone trouvé${j.via ? ` (via ${j.via})` : ""} : ${j.phone}`); }
-      else notify(j.tried?.length ? `Pas de téléphone public (essayé : ${j.tried.join(", ")})` : "Pas de téléphone public trouvé");
+      else setT(l.siren, { noPhone: true });
+      if (!j.phone) notify(j.tried?.length ? `Pas de téléphone public (essayé : ${j.tried.join(", ")})` : "Pas de téléphone public trouvé");
     } catch (e: any) {
       notify(e.message || "Recherche impossible");
     } finally {
@@ -200,7 +201,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
                         {t?.phone ? (
                           <a className="btn small" href={`tel:${t.phone.replace(/\s/g, "")}`}>Appeler {t.phone}</a>
                         ) : (
-                          <button className="btn small" onClick={() => phone(l)} disabled={phoneBusy === l.siren}>{phoneBusy === l.siren ? "Recherche…" : "Trouver le téléphone (1 à 2 requêtes)"}</button>
+                          t?.noPhone ? <span className="hint">Aucun numéro public trouvé (déjà cherché, 0 requête de plus)</span> : <button className="btn small" onClick={() => phone(l)} disabled={phoneBusy === l.siren}>{phoneBusy === l.siren ? "Recherche…" : "Trouver le téléphone (1 à 2 requêtes)"}</button>
                         )}
                         <a className="btn ghost small" href={`https://annuaire-entreprises.data.gouv.fr/entreprise/${l.siren}`} target="_blank" rel="noreferrer">Fiche officielle</a>
                         <a className="btn ghost small" href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${lead?.name || ""} ${l.name}`)}`} target="_blank" rel="noreferrer">LinkedIn</a>
