@@ -360,14 +360,26 @@ export default function Home() {
       return result.leads
         .filter((l) => (l.rating || 0) >= minRating && (l.reviews || 0) >= minReviews && (artKind === "all" || (artKind === "fit" ? fits[l.id]?.universe : fits[l.id]?.insta)))
         .sort((a, b) => (fits[b.id]?.score || 0) - (fits[a.id]?.score || 0));
-    return result.leads.filter(
+    const list = result.leads.filter(
       (l) =>
         (l.rating || 0) >= minRating &&
         (l.reviews || 0) >= minReviews &&
         (kind === "all" || l.presence === kind) &&
         (!wpOnly || l.audit?.cms === "WordPress" || !l.website)
     );
+    // « Tout ce que j'ai trouvé » : classé par ville (les villes les plus fournies d'abord), puis par score
+    if (result.city.zone === "cumul") {
+      const n: Record<string, number> = {};
+      for (const l of list) n[l.city] = (n[l.city] || 0) + 1;
+      return [...list].sort((a, b) => (n[b.city] - n[a.city]) || a.city.localeCompare(b.city) || b.score - a.score);
+    }
+    return list;
   }, [result, minRating, minReviews, kind, wpOnly, artKind, fits]);
+  const byCity = useMemo(() => {
+    const n: Record<string, number> = {};
+    for (const l of shown) n[l.city] = (n[l.city] || 0) + 1;
+    return n;
+  }, [shown]);
   const wpCount = useMemo(() => (result?.leads || []).filter((l) => l.audit?.cms === "WordPress").length, [result]);
 
   const updatePipeline = useCallback(
@@ -640,7 +652,7 @@ export default function Home() {
                   </select>
                   <select value={allCity} onChange={(e) => setAllCity(e.target.value)} aria-label="Ville">
                     <option value="">Toutes les villes</option>
-                    {[...new Set(pool.map((l) => l.city))].sort().map((c) => <option key={c} value={c}>{c}</option>)}
+                    {Object.entries(pool.reduce((n, l) => ({ ...n, [l.city]: (n[l.city] || 0) + 1 }), {} as Record<string, number>)).sort((a, b) => b[1] - a[1]).map(([c, k]) => <option key={c} value={c}>{c} ({k})</option>)}
                   </select>
                 </>
               )}
@@ -717,7 +729,8 @@ export default function Home() {
                 <div className="list-col">
                   {shown.length ? (
                     <ul className="list">
-                      {shown.map((l) => {
+                      {shown.map((l, idx) => {
+                        const cityHead = result.city.zone === "cumul" && (idx === 0 || shown[idx - 1].city !== l.city);
                         const inPipe = pipeline[l.id];
                         const isSel = selected.includes(l.id);
                         const rs = rowStatus(l);
@@ -725,7 +738,14 @@ export default function Home() {
                         const fit = artMode ? fits[l.id] : null;
                         const top = artMode ? null : detectNeeds(l).find((n) => n.priority === 1 && !n.deadline) || detectNeeds(l).find((n) => !n.deadline && n.priority === 2);
                         return (
-                          <li key={l.id} className="row" data-active={openId === l.id} data-kind={l.presence}>
+                          <React.Fragment key={l.id}>
+                          {cityHead && (
+                            <li className="city-head">
+                              <b>{l.city || "Ville inconnue"}</b><span>{byCity[l.city]} entreprise{byCity[l.city] > 1 ? "s" : ""}</span>
+                              {!allCity && <button className="linkish" onClick={() => setAllCity(l.city)}>Voir seulement cette ville</button>}
+                            </li>
+                          )}
+                          <li className="row" data-active={openId === l.id} data-kind={l.presence}>
                             <label className="sel" title="Ajouter à la tournée" onClick={(e) => e.stopPropagation()}>
                               <input type="checkbox" checked={isSel} onChange={() => toggle(l.id)} aria-label={`Ajouter ${l.name} à la tournée`} />
                             </label>
@@ -751,6 +771,7 @@ export default function Home() {
                               )}
                             </div>
                           </li>
+                          </React.Fragment>
                         );
                       })}
                     </ul>

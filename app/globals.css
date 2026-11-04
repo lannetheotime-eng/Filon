@@ -1075,3 +1075,8 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 .scope button:disabled { opacity: .4; }
 .scope select { background: var(--raise); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 8px 12px; font: inherit; font-size: 13px; }
 .linkish { border: 0; background: none; color: var(--mark-ink); padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
+.city-head { list-style: none; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 14px 4px 2px; border-bottom: 1px solid var(--line); }
+.city-head:first-child { padding-top: 0; }
+.city-head b { font-family: var(--display); font-size: 18px; letter-spacing: -0.02em; }
+.city-head span { color: var(--ink-3); font-size: 13px; }
+.city-head .linkish { margin-left: auto; font-size: 12.5px; }

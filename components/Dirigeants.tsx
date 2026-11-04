@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { HoldingLead } from "../lib/holdings-shared";
 import { EFFECTIF, EFFECTIF_LABEL, NAF_LABEL, SECTORS, fmtEur, score, signals } from "../lib/holdings-shared";
 import { usePersistent, toCsv, download } from "../lib/store";
@@ -86,7 +86,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
     return (scope === "all" ? Object.values(all) : res?.leads || [])
       .filter((l) => only === "all" || (only === "followed" ? !!track[l.siren] : !track[l.siren] || track[l.siren].status === "À appeler" || track[l.siren].status === "À rappeler"))
       .filter((l) => !t || `${l.name} ${l.city} ${l.holdings.map((h) => h.name + h.owners.map((o) => o.name).join(" ")).join(" ")} ${l.people.map((p) => p.name).join(" ")}`.toLowerCase().includes(t))
-      .sort((a, b) => score(b) - score(a));
+      .sort((a, b) => (scope === "all" ? a.city.localeCompare(b.city) : 0) || score(b) - score(a));
   }, [res, q, only, track, scope, all]);
 
   function exportCsv() {
@@ -167,12 +167,15 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
           </div>
 
           <ul className="list dg-list">
-            {list.map((l) => {
+            {list.map((l, idx) => {
+              const cityHead = scope === "all" && (idx === 0 || list[idx - 1].city !== l.city);
               const lead = l.holdings.flatMap((h) => h.owners)[0] || l.people[0];
               const t = track[l.siren];
               const isOpen = open === l.siren;
               return (
-                <li key={l.siren} className="row dg-row" data-active={isOpen}>
+                <Fragment key={l.siren}>
+                {cityHead && <li className="city-head"><b>{l.city || "Ville inconnue"}</b><span>{list.filter((x) => x.city === l.city).length} dirigeant{list.filter((x) => x.city === l.city).length > 1 ? "s" : ""}</span></li>}
+                <li className="row dg-row" data-active={isOpen}>
                   <button className="row-main" onClick={() => setOpen(isOpen ? null : l.siren)}>
                     <span className="mono none" aria-hidden>{score(l)}</span>
                     <div className="row-text">
@@ -210,6 +213,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
                     </div>
                   )}
                 </li>
+                </Fragment>
               );
             })}
             {!list.length && <li className="list empty"><strong>Aucune entreprise avec ces filtres</strong>Élargis la zone ou change de secteur.</li>}
