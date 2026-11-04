@@ -7,11 +7,20 @@ const API = "https://recherche-entreprises.api.gouv.fr/search";
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Appel au registre, avec un débit limité pour toute l'instance et des pauses croissantes en cas de saturation (429)
+let lastCall = 0;
 async function call(params: Record<string, string>) {
   const q = new URLSearchParams({ ...params, etat_administratif: "A" });
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const gap = 260 - (Date.now() - lastCall); // au plus ~4 requêtes par seconde, sous la limite de 7
+    if (gap > 0) await wait(gap);
+    lastCall = Date.now();
     const res = await fetch(`${API}?${q}`, { cache: "no-store", headers: { Accept: "application/json" } });
-    if (res.status === 429) { await wait(1200); continue; }
+    if (res.status === 429) {
+      const ra = Number(res.headers.get("retry-after")) || 0;
+      await wait(ra ? ra * 1000 : 1000 * 2 ** attempt); // 1 s, 2 s, 4 s, 8 s
+      continue;
+    }
     if (!res.ok) throw new Error(`Le registre des entreprises ne répond pas (${res.status}). Réessaie dans un instant.`);
     return res.json();
   }
@@ -60,7 +69,6 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
     results.push(...(j.results || []));
     lastPage = j.total_pages || 1;
     if (p >= lastPage) break;
-    await wait(180); // l'API accepte environ 7 requêtes par seconde
   }
 
   // Sociétés dont un dirigeant est une personne morale = détenues ou présidées par une holding
@@ -74,7 +82,7 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
 
   // Qui est derrière la holding : ses propres dirigeants (une requête par holding, en série)
   const cache = new Map<string, { name: string; people: { name: string; role: string }[]; naf?: string; created?: string }>();
-  for (const x of kept.slice(0, 40)) {
+  for (const x of kept.slice(0, 25)) {
     for (const h of x.holdings.slice(0, 2)) {
       if (cache.has(h.siren)) continue;
       try {
@@ -89,7 +97,6 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
       } catch {
         cache.set(h.siren, { name: titleCase(h.denomination || ""), people: [] });
       }
-      await wait(160);
     }
   }
 
