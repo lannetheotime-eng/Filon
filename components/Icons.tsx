@@ -36,3 +36,7 @@ export function IconPeople() {
     </svg>
   );
 }
+
+export const IconKey = () => (
+  <svg {...base}><circle cx="8" cy="15" r="4.5" /><path d="m11.2 11.8 8.3-8.3M16.5 6.5l2.5 2.5M14 9l2 2" /></svg>
+);

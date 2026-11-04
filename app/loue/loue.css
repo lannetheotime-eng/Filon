@@ -1,6 +1,9 @@
 /* Vendu loué : page publique de Filon. Reprend les jetons de la charte (globals.css).
    Élément fort : l'étiquette de rentabilité A→G, calquée sur l'échelle du DPE. */
 .vl { min-height: 100%; }
+/* Dans l'appli Filon : la page suit la colonne de l'onglet et laisse la place à la barre du bas */
+.vl-embedded .vl-main { padding-block: 0 140px; }
+.vl-embedded .vl-hero h1 { font-size: clamp(40px, 11vw, 64px); }
 .vl-main {
   max-width: 620px; margin: 0 auto;
   padding-block: 32px calc(56px + var(--safe-b, 0px));

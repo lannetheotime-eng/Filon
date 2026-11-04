@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import "./loue.css";
 
 export const metadata: Metadata = {
   title: "Vendu loué",
@@ -7,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  return <div className="vl">{children}</div>;
+  return <>{children}</>;
 }

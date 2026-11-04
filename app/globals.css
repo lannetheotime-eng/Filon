@@ -927,6 +927,10 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
   .cmdk kbd { display: none; }
   .bottom-nav { left: 12px; right: 12px; transform: none; justify-content: space-between; bottom: calc(10px + var(--safe-b)); }
   .bottom-nav button { flex-direction: column; gap: 2px; padding: 8px 6px; font-size: 10.5px; flex: 1; }
+  /* 7 onglets : on resserre, et la barre défile si l'écran est vraiment étroit */
+  .bottom-nav { gap: 0; padding: 6px 4px; overflow-x: auto; scrollbar-width: none; }
+  .bottom-nav::-webkit-scrollbar { display: none; }
+  .bottom-nav button { flex: 1 0 auto; padding: 8px 5px; font-size: 10px; white-space: nowrap; }
   .bottom-nav button svg { width: 20px; height: 20px; }
   .bottom-nav b { position: absolute !important; top: 2px; right: 18%; }
   .searchbar { border-radius: 24px; }
