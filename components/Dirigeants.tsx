@@ -7,6 +7,12 @@ import { usePersistent, toCsv, download } from "../lib/store";
 type Track = { status: string; notes?: string; phone?: string; site?: string; at: string };
 const STATUS = ["À appeler", "Appelé", "À rappeler", "RDV", "Pas intéressé"];
 
+// Lit une réponse serveur sans planter si ce n'est pas du JSON (délai dépassé, page d'erreur…)
+async function readJson(r: Response) {
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { throw new Error(r.status === 504 || /timeout|timed out/i.test(t) ? "Le registre a mis trop de temps à répondre : réessaie." : "Réponse inattendue du serveur : réessaie dans un instant."); }
+}
+
 export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend: (n: number) => boolean; spend: (n: number) => void; notify: (m: string) => void; live: boolean }) {
   const [sector, setSector] = usePersistent("filon.dg.sector", 0);
   const [custom, setCustom] = useState("");
@@ -17,6 +23,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const [effectif, setEffectif] = useState("");
   const [holdingOnly, setHoldingOnly] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [moreBusy, setMoreBusy] = useState(false);
   const [err, setErr] = useState("");
   const [res, setRes] = usePersistent<{ leads: HoldingLead[]; scanned: number; total: number; next?: number; demo?: boolean } | null>("filon.dg.last", null);
   const [track, setTrack] = usePersistent<Record<string, Track>>("filon.dg.track", {});
@@ -29,20 +36,21 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const holdingSector = naf.length > 0 && naf.every((n) => n === "64.20Z" || n === "70.10Z");
 
   async function go(demo = false, more = false) {
-    setBusy(true); setErr("");
+    if (more) setMoreBusy(true); else setBusy(true);
+    setErr("");
     try {
       const r = await fetch("/api/holdings", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caMin, netMin, name, naf, zone, effectif, holdingOnly: holdingSector ? false : holdingOnly, pages: 4, from: more ? res?.next : 1, demo }),
+        body: JSON.stringify({ caMin, netMin, name, naf, zone, effectif, holdingOnly: holdingSector ? false : holdingOnly, from: more ? res?.next : 1, demo }),
       });
-      const j = await r.json();
+      const j = await readJson(r);
       if (!r.ok) throw new Error(j.error);
       setRes((prev) => (more && prev ? { ...j, leads: [...prev.leads, ...j.leads.filter((x: HoldingLead) => !prev.leads.some((y) => y.siren === x.siren))], scanned: prev.scanned + j.scanned, demo } : { ...j, demo }));
       if (!more) setOpen(null);
     } catch (e: any) {
       setErr(e.message || "La recherche a échoué.");
     } finally {
-      setBusy(false);
+      setBusy(false); setMoreBusy(false);
     }
   }
 
@@ -56,7 +64,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
       const owner = l.holdings.flatMap((h) => h.owners)[0]?.name || l.people[0]?.name || "";
       const qs = new URLSearchParams({ name: l.name, city: l.city, brand: l.brand || "", address: l.address, person: owner, holding: l.isHolding ? "1" : "0", dept: l.cp.slice(0, 2) });
       const r = await fetch(`/api/phone?${qs}`);
-      const j = await r.json();
+      const j = await readJson(r);
       if (!r.ok) throw new Error(j.error);
       if (live && j.calls) spend(j.calls);
       if (j.phone) { setT(l.siren, { phone: j.phone, site: j.website, notes: track[l.siren]?.notes || (j.via ? `Téléphone de ${j.via}` : undefined) }); notify(`Téléphone trouvé${j.via ? ` (via ${j.via})` : ""} : ${j.phone}`); }
@@ -194,7 +202,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
             })}
             {!list.length && <li className="list empty"><strong>Aucune entreprise avec ces filtres</strong>Élargis la zone ou change de secteur.</li>}
           </ul>
-          {res.next && !res.demo && <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => go(false, true)} disabled={busy}>Charger 100 de plus</button>}
+          {res.next && !res.demo && <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => go(false, true)} disabled={moreBusy}>{moreBusy ? "Chargement…" : "Afficher 10 de plus"}</button>}
           <p className="attrib">Registre national des entreprises (INSEE, INPI) via l'Annuaire des entreprises. Les téléphones viennent de Google quand l'entreprise en affiche un. Prospection B2B : laisse toujours au dirigeant la possibilité de refuser d'être recontacté.</p>
         </section>
       )}

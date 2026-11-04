@@ -57,32 +57,36 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
   if (s.netMin != null) base.resultat_net_min = String(s.netMin);
   if (s.naf.length) base.activite_principale = s.naf.join(",");
   if (s.effectif) base.tranche_effectif_salarie = s.effectif;
-  const pages = Math.max(1, Math.min(4, s.pages || 2));
+  // Petits lots : 10 résultats par recherche, « Afficher 10 de plus » pour la suite.
+  // Avec le filtre holding, on lit des pages de 25 jusqu'à en trouver 10 (3 pages au plus).
+  const want = 10;
+  base.per_page = s.holdingOnly ? "25" : "10";
   const from = Math.max(1, s.from || 1);
-
-  const results: any[] = [];
-  let total = 0;
-  let lastPage = 1;
-  for (let p = from; p < from + pages; p++) {
-    const j = await call({ ...base, page: String(p) });
-    total = j.total_results || total;
-    results.push(...(j.results || []));
-    lastPage = j.total_pages || 1;
-    if (p >= lastPage) break;
-  }
-
-  // Sociétés dont un dirigeant est une personne morale = détenues ou présidées par une holding
-  const rows = results.map((r) => {
+  const isRow = (r: any) => {
     const dir: any[] = r.dirigeants || [];
     const holdings = dir.filter((d) => d.type_dirigeant === "personne morale" && d.siren);
     const people = dir.filter((d) => d.type_dirigeant !== "personne morale").map((d) => ({ name: person(d), role: d.qualite || "" })).filter((x) => x.name);
     return { r, holdings, people };
-  });
-  const kept = s.holdingOnly ? rows.filter((x) => x.holdings.length) : rows;
+  };
+  const results: any[] = [];
+  const kept: ReturnType<typeof isRow>[] = [];
+  let total = 0, lastPage = 1, p = from;
+  for (; p < from + 3; p++) {
+    const j = await call({ ...base, page: String(p) });
+    total = j.total_results || total;
+    lastPage = j.total_pages || 1;
+    for (const r of j.results || []) {
+      results.push(r);
+      const row = isRow(r);
+      if (!s.holdingOnly || row.holdings.length) kept.push(row);
+    }
+    if (kept.length >= want || p >= lastPage || !s.holdingOnly) { p++; break; }
+  }
+  const pagesEnd = p; // prochaine page à lire
 
   // Qui est derrière la holding : ses propres dirigeants (une requête par holding, en série)
   const cache = new Map<string, { name: string; people: { name: string; role: string }[]; naf?: string; created?: string }>();
-  for (const x of kept.slice(0, 25)) {
+  for (const x of kept.slice(0, 15)) {
     for (const h of x.holdings.slice(0, 2)) {
       if (cache.has(h.siren)) continue;
       try {
@@ -127,7 +131,7 @@ export async function searchHoldings(s: HoldingSearch): Promise<{ leads: Holding
     };
   });
   const filtered = leads.filter((l) => (!s.caMin || (l.ca != null && l.ca >= s.caMin)) && (s.netMin == null || (l.net != null && l.net >= s.netMin)));
-  return { leads: filtered, scanned: results.length, total, next: from + pages <= lastPage ? from + pages : undefined };
+  return { leads: filtered, scanned: results.length, total, next: pagesEnd <= lastPage ? pagesEnd : undefined };
 }
 
 // Exemple fictif, pour la démonstration (aucun appel au registre)
