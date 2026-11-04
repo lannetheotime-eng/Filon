@@ -55,9 +55,21 @@ export default function Home() {
   // Mode simple (sans base) : compteur de requêtes tenu par ce navigateur, par mois
   const [localUsage, setLocalUsage] = usePersistent<{ month: string; calls: number; day: string; today: number }>("filon.usage", { month: "", calls: 0, day: "", today: 0 });
   const [recent, setRecent] = usePersistent<Recent[]>("filon.recent", []);
-  const [result, setResult] = usePersistent<ScanResult | null>("filon.last", null);
+  const [lastResult, setResult] = usePersistent<ScanResult | null>("filon.last", null);
+  // « Tout ce que j'ai trouvé » : toutes les entreprises des recherches précédentes, cumulées
+  const [scope, setScope] = useState<"last" | "all">("last");
+  const [allTrade, setAllTrade] = useState("");
+  const [allCity, setAllCity] = useState("");
   const [leads, setLeads] = usePersistent<Record<string, Lead>>("filon.leads", {});
   const [pipeline, setPipeline, ready] = usePersistent<Record<string, PipelineEntry>>("filon.pipeline", {});
+  const pool = useMemo(() => Object.values(leads).filter((l) => isArt(l.tradeId) === (mode === "tableaux")), [leads, mode]);
+  const allResult = useMemo<ScanResult | null>(() => {
+    if (scope !== "all" || !pool.length) return null;
+    const list = pool.filter((l) => (!allTrade || l.tradeId === allTrade) && (!allCity || l.city === allCity)).sort((a, b) => (b.foundAt || "").localeCompare(a.foundAt || ""));
+    const ref = list[0] || pool[0];
+    return { city: { name: allCity || "toutes villes", dept: "", lat: lastResult?.city.lat ?? ref.lat, lng: lastResult?.city.lng ?? ref.lng, zone: "cumul" }, tradeId: allTrade || (mode === "tableaux" ? artTrade : siteTrade), leads: list, scanned: list.length, withSite: 0, audited: 0, calls: 0, demo: false };
+  }, [scope, pool, allTrade, allCity, lastResult, mode, artTrade, siteTrade]);
+  const result = scope === "all" && allResult ? allResult : lastResult;
   const [profile, setProfileRaw] = usePersistent<Profile>("filon.profile", DEFAULT_PROFILE);
   const [profileAt, setProfileAt] = usePersistent<string>("filon.profileAt", "");
   const setProfile = (p: Profile) => { setProfileRaw(p); setProfileAt(new Date().toISOString()); };
@@ -251,6 +263,7 @@ export default function Home() {
       return;
     }
     setLoading(true);
+    setScope("last");
     setError("");
     setSelected([]);
     setStep(0);
@@ -534,7 +547,7 @@ export default function Home() {
             </section>
           )}
 
-          {!result && !loading && (
+          {!result && !loading && scope === "last" && (
             <section className="empty-start">
               {mode === "tableaux" ? (
                 <>
@@ -565,13 +578,32 @@ export default function Home() {
             </section>
           )}
 
+          {(lastResult || pool.length > 0) && !loading && (
+            <div className="scope" role="tablist" aria-label="Résultats affichés">
+              <button role="tab" aria-selected={scope === "last"} onClick={() => setScope("last")} disabled={!lastResult}>Dernière recherche</button>
+              <button role="tab" aria-selected={scope === "all"} onClick={() => setScope("all")}>Tout ce que j'ai trouvé <b>{pool.length}</b></button>
+              {scope === "all" && (
+                <>
+                  <select value={allTrade} onChange={(e) => setAllTrade(e.target.value)} aria-label="Métier">
+                    <option value="">Tous les métiers</option>
+                    {[...new Set(pool.map((l) => l.tradeId))].map((id) => <option key={id} value={id}>{getTrade(id)?.label || id}</option>)}
+                  </select>
+                  <select value={allCity} onChange={(e) => setAllCity(e.target.value)} aria-label="Ville">
+                    <option value="">Toutes les villes</option>
+                    {[...new Set(pool.map((l) => l.city))].sort().map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </>
+              )}
+            </div>
+          )}
+
           {result && !loading && (
             <section className="results">
               <div className="res-head">
-                <h1><b>{result.leads.length}</b> {result.city.zone?.startsWith("Recherche") ? `résultat${result.leads.length > 1 ? "s" : ""} à ${result.city.name}` : `${trade.label.toLowerCase()} à ${result.city.name}`}</h1>
+                <h1><b>{result.leads.length}</b> {result.city.zone === "cumul" ? `entreprise${result.leads.length > 1 ? "s" : ""} trouvée${result.leads.length > 1 ? "s" : ""} au fil de tes recherches` : result.city.zone?.startsWith("Recherche") ? `résultat${result.leads.length > 1 ? "s" : ""} à ${result.city.name}` : `${trade.label.toLowerCase()} à ${result.city.name}`}</h1>
                 {artMode && <p className="eyebrow">Lieux pour tes tableaux · vente directe{priceText(profile) ? ` · ${priceText(profile)}` : ""}</p>}
                 <p className="hint">
-                  {result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées
+                  {result.city.zone === "cumul" ? `${allTrade ? getTrade(allTrade)?.label : "Tous métiers"} · ${allCity || "toutes villes"} · les plus récentes en premier` : <>{result.city.zone ? `${result.city.zone} · ` : ""}{result.scanned} fiches analysées</>}
                   {regProgress ? ` · ancienneté ${regProgress.done}/${regProgress.total}` : ""}{mailScan ? ` · e-mails ${mailScan.done}/${mailScan.total}` : ""}
                 </p>
               </div>

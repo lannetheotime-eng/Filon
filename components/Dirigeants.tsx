@@ -26,6 +26,8 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const [moreBusy, setMoreBusy] = useState(false);
   const [err, setErr] = useState("");
   const [res, setRes] = usePersistent<{ leads: HoldingLead[]; scanned: number; total: number; next?: number; demo?: boolean } | null>("filon.dg.last", null);
+  const [all, setAll] = usePersistent<Record<string, HoldingLead>>("filon.dg.all", {});
+  const [scope, setScope] = useState<"last" | "all">("last");
   const [track, setTrack] = usePersistent<Record<string, Track>>("filon.dg.track", {});
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -45,6 +47,8 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
       });
       const j = await readJson(r);
       if (!r.ok) throw new Error(j.error);
+      if (!demo) setAll((prev) => { const n = { ...prev }; for (const x of j.leads as HoldingLead[]) n[x.siren] = x; return n; });
+      setScope("last");
       setRes((prev) => (more && prev ? { ...j, leads: [...prev.leads, ...j.leads.filter((x: HoldingLead) => !prev.leads.some((y) => y.siren === x.siren))], scanned: prev.scanned + j.scanned, demo } : { ...j, demo }));
       if (!more) setOpen(null);
     } catch (e: any) {
@@ -78,11 +82,11 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
 
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return (res?.leads || [])
+    return (scope === "all" ? Object.values(all) : res?.leads || [])
       .filter((l) => only === "all" || (only === "followed" ? !!track[l.siren] : !track[l.siren] || track[l.siren].status === "À appeler" || track[l.siren].status === "À rappeler"))
       .filter((l) => !t || `${l.name} ${l.city} ${l.holdings.map((h) => h.name + h.owners.map((o) => o.name).join(" ")).join(" ")} ${l.people.map((p) => p.name).join(" ")}`.toLowerCase().includes(t))
       .sort((a, b) => score(b) - score(a));
-  }, [res, q, only, track]);
+  }, [res, q, only, track, scope, all]);
 
   function exportCsv() {
     download(`dirigeants-${zone || "france"}.csv`, toCsv(list.map((l) => ({
@@ -136,11 +140,18 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
       {err && <p className="error">{err}</p>}
       {busy && <p className="hint">On interroge le registre{holdingSector ? "" : ", puis on remonte chaque holding jusqu'à son dirigeant"} : 10 à 40 secondes.</p>}
 
-      {res && !busy && (
+      {Object.keys(all).length > 0 && !busy && (
+        <div className="scope" role="tablist" aria-label="Résultats affichés">
+          <button role="tab" aria-selected={scope === "last"} onClick={() => setScope("last")} disabled={!res}>Dernière recherche</button>
+          <button role="tab" aria-selected={scope === "all"} onClick={() => setScope("all")}>Tout ce que j'ai trouvé <b>{Object.keys(all).length}</b></button>
+        </div>
+      )}
+
+      {(res || scope === "all") && !busy && (
         <section className="results">
           <div className="res-head">
-            <h1><b>{list.length}</b> {holdingSector ? "holdings" : holdingOnly ? "entreprises détenues par une holding" : "entreprises"}</h1>
-            <p className="hint">{res.demo ? "Exemple fictif · " : ""}{res.scanned} analysées sur {res.total.toLocaleString("fr-FR")} au registre</p>
+            <h1><b>{list.length}</b> {scope === "all" ? "dirigeants trouvés au fil de tes recherches" : holdingSector ? "holdings" : holdingOnly ? "entreprises détenues par une holding" : "entreprises"}</h1>
+            <p className="hint">{scope === "all" || !res ? "Toutes tes recherches cumulées" : `${res.demo ? "Exemple fictif · " : ""}${res.scanned} analysées sur ${res.total.toLocaleString("fr-FR")} au registre`}</p>
           </div>
           <div className="res-bar">
             <div className="segments">
@@ -202,7 +213,7 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
             })}
             {!list.length && <li className="list empty"><strong>Aucune entreprise avec ces filtres</strong>Élargis la zone ou change de secteur.</li>}
           </ul>
-          {res.next && !res.demo && <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => go(false, true)} disabled={moreBusy}>{moreBusy ? "Chargement…" : "Afficher 10 de plus"}</button>}
+          {scope === "last" && res?.next && !res.demo && <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => go(false, true)} disabled={moreBusy}>{moreBusy ? "Chargement…" : "Afficher 10 de plus"}</button>}
           <p className="attrib">Registre national des entreprises (INSEE, INPI) via l'Annuaire des entreprises. Les téléphones viennent de Google quand l'entreprise en affiche un. Prospection B2B : laisse toujours au dirigeant la possibilité de refuser d'être recontacté.</p>
         </section>
       )}

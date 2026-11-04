@@ -1067,3 +1067,10 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 .mail-to input { font-family: var(--data); }
 .mail-chip { color: var(--ok); font-size: 12px; font-family: var(--data); }
 .mail-help { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; }
+.scope { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 22px 0 -6px; }
+.scope button { border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--ink-2); border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.scope button[aria-selected="true"] { background: var(--ink); color: #050506; border-color: var(--ink); }
+.scope button b { font-family: var(--data); margin-left: 4px; color: var(--mark-ink); }
+.scope button[aria-selected="true"] b { color: var(--mark); }
+.scope button:disabled { opacity: .4; }
+.scope select { background: var(--raise); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 8px 12px; font: inherit; font-size: 13px; }
