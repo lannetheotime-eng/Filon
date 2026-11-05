@@ -333,7 +333,7 @@ export default function Home() {
         for (const l of j.leads as Lead[]) next[l.id] = l;
         return next;
       });
-      if (!(byName && bizName.trim())) setRecent((prev) => [{ city: j.city.name, tradeId: t, at: new Date().toISOString() }, ...prev.filter((x) => !(x.city === j.city.name && x.tradeId === t))].slice(0, 6));
+      if (!(byName && bizName.trim())) setRecent((prev) => [{ city: j.city.name, tradeId: t, at: new Date().toISOString() }, ...prev.filter((x) => !(x.city === j.city.name && x.tradeId === t))].slice(0, 60));
     } catch (e: any) {
       setError(e.message || "Le scan a échoué.");
     } finally {
@@ -655,7 +655,7 @@ export default function Home() {
               </div>
               {recent.length > 0 && (
                 <div className="recent">
-                  {recent.filter((r) => isArt(r.tradeId) === (mode === "tableaux")).map((r) => (
+                  {recent.filter((r) => isArt(r.tradeId) === (mode === "tableaux")).slice(0, 6).map((r) => (
                     <button key={r.city + r.tradeId} className="chip" onClick={() => { setCity(r.city); setTradeId(r.tradeId); runScan(r.city, r.tradeId); }} disabled={loading}>
                       {getTrade(r.tradeId)?.label} · {r.city}
                     </button>
@@ -671,6 +671,20 @@ export default function Home() {
               <button role="tab" aria-selected={scope === "all"} onClick={() => setScope("all")}>Tout ce que j'ai trouvé <b>{pool.length}</b></button>
               {scope === "all" && (
                 <>
+                  {recent.length > 0 && (
+                    <div className="past">
+                      <span>Tes recherches :</span>
+                      {recent.map((r) => {
+                        const n = pool.filter((l) => l.tradeId === r.tradeId && l.city === r.city).length;
+                        const on = allTrade === r.tradeId && allCity === r.city;
+                        return (
+                          <button key={r.tradeId + r.city} className={`chip ${on ? "on" : ""}`} onClick={() => { if (on) { setAllTrade(""); setAllCity(""); } else { setAllTrade(r.tradeId); setAllCity(r.city); } }}>
+                            {getTrade(r.tradeId)?.label || r.tradeId} · {r.city} <b>{n}</b>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <select value={allTrade} onChange={(e) => setAllTrade(e.target.value)} aria-label="Métier">
                     <option value="">Tous les métiers</option>
                     {[...new Set(pool.map((l) => l.tradeId))].map((id) => <option key={id} value={id}>{getTrade(id)?.label || id}</option>)}

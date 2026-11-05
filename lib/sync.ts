@@ -24,7 +24,7 @@ export function mergeData(local: SyncData, remote: SyncData | null): SyncData {
   const recent = [...(local.recent || []), ...(remote.recent || [])]
     .sort((a, b) => b.at.localeCompare(a.at))
     .filter((r) => (seen.has(r.city + r.tradeId) ? false : (seen.add(r.city + r.tradeId), true)))
-    .slice(0, 6);
+    .slice(0, 60);
   return {
     pipeline,
     leads,

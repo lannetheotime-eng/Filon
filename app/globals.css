@@ -1080,3 +1080,7 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 .city-head b { font-family: var(--display); font-size: 18px; letter-spacing: -0.02em; }
 .city-head span { color: var(--ink-3); font-size: 13px; }
 .city-head .linkish { margin-left: auto; font-size: 12.5px; }
+.past { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.past > span { color: var(--ink-3); font-size: 12.5px; margin-right: 2px; }
+.past .chip b { font-family: var(--data); color: var(--mark-ink); margin-left: 4px; }
+.past .chip.on { background: var(--mark-soft); border-color: var(--mark); color: var(--ink); }

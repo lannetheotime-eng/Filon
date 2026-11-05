@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { HoldingLead } from "../lib/holdings-shared";
 import { EFFECTIF, EFFECTIF_LABEL, NAF_LABEL, SECTORS, fmtEur, score, signals } from "../lib/holdings-shared";
 import { usePersistent, toCsv, download } from "../lib/store";
@@ -27,6 +27,11 @@ export default function Dirigeants({ canSpend, spend, notify, live }: { canSpend
   const [err, setErr] = useState("");
   const [res, setRes] = usePersistent<{ leads: HoldingLead[]; scanned: number; total: number; next?: number; demo?: boolean } | null>("filon.dg.last", null);
   const [all, setAll] = usePersistent<Record<string, HoldingLead>>("filon.dg.all", {});
+  // Les résultats affichés avant l'arrivée du cumul rejoignent « Tout ce que j'ai trouvé »
+  useEffect(() => {
+    if (res && !res.demo && res.leads.some((l) => !all[l.siren])) setAll((prev) => { const n = { ...prev }; for (const x of res.leads) if (!n[x.siren]) n[x.siren] = x; return n; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [res]);
   const [scope, setScope] = useState<"last" | "all">("last");
   const [track, setTrack] = usePersistent<Record<string, Track>>("filon.dg.track", {});
   const [open, setOpen] = useState<string | null>(null);
