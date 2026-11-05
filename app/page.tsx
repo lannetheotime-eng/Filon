@@ -189,26 +189,51 @@ export default function Home() {
     if (r.ok) setInvite(`${location.origin}/connexion?invitation=${j.code}`);
   }
 
+  // Sauvegarde complète : tout ce que Filon garde dans ce navigateur (recherches, pipeline, dirigeants, réglages…)
   function exportAll() {
-    const data = { version: 1, exportedAt: new Date().toISOString(), ...toSync(pipeline, leads, profile, profileAt, recent) };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const storage: Record<string, unknown> = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (k.startsWith("filon.")) { try { storage[k] = JSON.parse(localStorage.getItem(k) || "null"); } catch {} }
+      }
+    } catch {}
+    const data = { version: 2, exportedAt: new Date().toISOString(), storage, ...toSync(pipeline, leads, profile, profileAt, recent) };
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `filon-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+    notify(`Sauvegarde téléchargée : ${Object.keys(leads).length} entreprises, ${Object.keys(pipeline).length} suivies`);
   }
 
   async function importAll(file?: File) {
     if (!file) return;
     try {
-      const data = JSON.parse(await file.text()) as SyncData;
+      const data = JSON.parse(await file.text()) as SyncData & { version?: number; storage?: Record<string, any> };
+      if (data.storage) {
+        // Fusion : les listes (entreprises, pipeline, recherches, dirigeants) s'additionnent, le reste est remplacé
+        const isRec = (v: unknown) => v && typeof v === "object" && !Array.isArray(v);
+        for (const [k, v] of Object.entries(data.storage)) {
+          let cur: any = null;
+          try { cur = JSON.parse(localStorage.getItem(k) || "null"); } catch {}
+          let next: any = v;
+          if (k === "filon.pipeline" && isRec(cur) && isRec(v)) next = mergeData({ pipeline: cur, leads: {} }, { pipeline: v as any, leads: {} }).pipeline;
+          else if (["filon.leads", "filon.cache", "filon.dg.all", "filon.dg.track"].includes(k) && isRec(cur) && isRec(v)) next = { ...cur, ...(v as object) };
+          else if (k === "filon.profile" && isRec(cur) && (cur as any).firstName && !(v as any)?.firstName) next = cur;
+          try { localStorage.setItem(k, JSON.stringify(next)); } catch {}
+        }
+        setImportMsg(`Sauvegarde importée : ${Object.keys(data.storage["filon.leads"] || {}).length} entreprises, ${Object.keys(data.storage["filon.pipeline"] || {}).length} suivies. Rechargement…`);
+        setTimeout(() => location.reload(), 900);
+        return;
+      }
       if (!data.pipeline || !data.leads) throw new Error();
       const merged = mergeData(toSync(pipeline, leads, profile, profileAt, recent), data);
       setPipeline(merged.pipeline);
       setLeads((prev) => ({ ...prev, ...merged.leads }));
       if (merged.profile) setProfileRaw(merged.profile);
-      setImportMsg(`Sauvegarde importée : ${Object.keys(data.pipeline).length} entreprises suivies.`);
+      setImportMsg(`Ancienne sauvegarde importée : ${Object.keys(data.pipeline).length} entreprises suivies (les recherches n'y étaient pas encore).`);
     } catch {
       setImportMsg("Ce fichier n'est pas une sauvegarde Filon.");
     }
