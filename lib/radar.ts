@@ -22,11 +22,27 @@ function smartCase(s: string) {
 const person = (prenom?: string, nom?: string) => smartCase([String(prenom || "").split(/[ ,]/)[0], nom].filter(Boolean).join(" "));
 
 // ——— Zone et requête ———
+// « 31, 82 », « 31000 » ou un nom de commune (« Toulouse » → ses codes postaux, via geo.api.gouv.fr)
+export async function resolveZone(zone: string): Promise<string> {
+  const parts = zone.split(/[,;]+/).map((p) => p.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const p of parts) {
+    if (/^(\d{2}|2A|2B|97\d|\d{5})$/i.test(p) || /^[\d\s]+$/.test(p)) { out.push(...p.split(/\s+/)); continue; }
+    try {
+      const r = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(p)}&fields=codesPostaux&boost=population&limit=1`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+      const c = (await r.json())?.[0];
+      if (c?.codesPostaux?.length) { out.push(...c.codesPostaux); continue; }
+    } catch {}
+    throw new Error(`Commune introuvable : « ${p} ». Essaie un département (31) ou un code postal (31000).`);
+  }
+  return out.join(", ");
+}
+
 function zoneWhere(zone: string) {
   const parts = zone.split(/[\s,;]+/).map((p) => p.trim().toUpperCase()).filter(Boolean);
   const depts = parts.filter((p) => /^(\d{2}|2A|2B|97\d)$/.test(p));
   const cps = parts.filter((p) => /^\d{5}$/.test(p));
-  if (!depts.length && !cps.length) throw new Error("Zone : indique un ou plusieurs départements (31, 82) ou codes postaux (31000).");
+  if (!depts.length && !cps.length) throw new Error("Zone : indique un ou plusieurs départements (31, 82), des codes postaux (31000) ou une commune.");
   const c: string[] = [];
   if (depts.length) c.push(`numerodepartement in (${depts.map(lit).join(", ")})`);
   if (cps.length) c.push(`cp in (${cps.map(lit).join(", ")})`);
@@ -49,7 +65,7 @@ export function buildWhere(q: RadarQuery) {
 
 // ——— Ce qui n'est pas un prospect ———
 const NOT_A_CLIENT_FORM = /civile immobili|participations financi|soci[ée]t[ée] civile de moyens|groupement foncier|civile de construction|civile d'attribution|fonds commun|fiducie|groupement d'int[ée]r[êe]t [ée]conomique/i;
-const NOT_A_CLIENT_ACT = /holding|prises? de participations?|(acquisition|d[ée]tention)[^.]{0,140}(immobili|participations|titres|valeurs mobili)|gestion (de|des) (titres|participations|valeurs mobili[èe]res|ses participations)|acquisition[^.]{0,80}(immeubles?|biens? immobiliers?|b[âa]timents?|terrains?|locaux)|location (de |d'|en )?(logements?|meubl[ée]s?|biens|locaux|immeubles?|appartements?)|location meubl[ée]e|loueur en meubl[ée]|marchand de biens|gestion de (son|leur) patrimoine|livraison (de repas|[àa] domicile|de colis)|livreur|coursier|chauffeur vtc|\bvtc\b|transport de personnes|v[ée]hicule de transport avec chauffeur|dropshipping|vente (en ligne|[àa] distance) sur (des |les )?plateformes?/i;
+const NOT_A_CLIENT_ACT = /holding|prises? de participations?|(acquisition|d[ée]tention)[^.]{0,140}(immobili|participations|titres|valeurs mobili)|gestion (de|des) (titres|participations|valeurs mobili[èe]res|ses participations)|acquisition[^.]{0,80}(immeubles?|biens? immobiliers?|b[âa]timents?|terrains?|locaux)|location (de |d'|en )?(logements?|meubl[ée]s?|biens|locaux|immeubles?|appartements?)|location meubl[ée]e|loueur en meubl[ée]|marchand de biens|gestion de (son|leur) patrimoine|livraison (de repas|[àa] domicile|de colis)|livreur|coursier|chauffeur vtc|\bvtc\b|transport de personnes|v[ée]hicule de transport avec chauffeur|dropshipping|vente (en ligne|[àa] distance) sur (des |les )?plateformes?|projet commun de fusion|fusion[- ]absorption|transmission universelle de patrimoine/i;
 const FRANCHISE = /carrefour|intermarch|franprix|\bspar\b|\bcasino\b|auchan|\blidl\b|leclerc|monoprix|\bpicard\b|mc ?donald|burger king|\bkfc\b|domino'?s|basic.?fit|o'?tacos|subway|five guys|marie blach[èe]re|la mie c[âa]line|\btchip\b|franck provost|jean louis david|camille albane|dessange|optic 2000|afflelou|\bkrys\b|g[ée]n[ée]rale d'optique|century 21|\borpi\b|lafor[êe]t|st[ée]phane plaza|guy hoquet|era immobilier|\bfnac\b|biocoop|naturalia/i;
 
 // ——— Secteur, métier Filon le plus proche, étiquette ———
@@ -232,7 +248,7 @@ const cache = new Map<string, { at: number; data: RadarResult }>();
 
 export async function radar(q: RadarQuery): Promise<RadarResult> {
   const offset = Math.max(0, Math.min(9900, q.offset || 0));
-  const where = buildWhere(q);
+  const where = buildWhere({ ...q, zone: await resolveZone(q.zone) });
   const key = `${where}|${offset}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 15 * 60_000) return hit.data;

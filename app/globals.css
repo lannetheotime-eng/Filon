@@ -1105,7 +1105,7 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 .rd-zone, .rd-period { display: block; padding: 6px 14px; border-radius: 16px; }
 .rd-zone:focus-within, .rd-period:focus-within { background: var(--raise); }
 .rd-zone input, .rd-period select { border: 0; background: none; color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; padding: 0; outline: none; }
-.rd-zone input { width: 130px; font-family: var(--data); }
+.rd-zone input { width: 210px; font-family: var(--data); }
 .rd-period select option { background: var(--sheet); }
 .rd-bar .switch { font-size: 13.5px; }
 .rd-fresh { color: var(--mark-ink); }

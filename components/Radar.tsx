@@ -87,7 +87,7 @@ export default function Radar({ pipeline, leads, onAdd, onOpen }: {
       score: it.score, foundAt: new Date().toISOString(),
     };
     const note = [
-      `${KIND_LABEL[it.kind]} publiée au BODACC le ${fmtDay(it.published)}${it.form ? ` (${it.form})` : ""} : ${it.activity}`,
+      `BODACC du ${fmtDay(it.published)} · ${KIND_LABEL[it.kind]}${it.form ? ` (${it.form})` : ""} : ${it.activity}`,
       it.starts && it.starts >= today() ? `Début d'activité annoncé : ${fmtDay(it.starts)}.` : "",
       it.kind === "reprise" ? `Fonds repris${it.price ? ` pour ${fmtEur(it.price)}` : ""}${it.previous ? ` à ${it.previous}` : ""} : un site existe peut-être déjà, à vérifier.` : "",
       `Fiche officielle : https://annuaire-entreprises.data.gouv.fr/entreprise/${it.siren}`,
@@ -124,7 +124,7 @@ export default function Radar({ pipeline, leads, onAdd, onOpen }: {
 
       <form className="rd-bar" onSubmit={(e) => { e.preventDefault(); setZone(zoneInput.trim() || "31"); }}>
         <label className="rd-zone"><span>Zone</span>
-          <input value={zoneInput} onChange={(e) => setZoneInput(e.target.value)} onBlur={() => zoneInput.trim() && zoneInput.trim() !== zone && setZone(zoneInput.trim())} placeholder="31, 82 ou 31000" inputMode="numeric" aria-label="Départements ou codes postaux" />
+          <input value={zoneInput} onChange={(e) => setZoneInput(e.target.value)} onBlur={() => zoneInput.trim() && zoneInput.trim() !== zone && setZone(zoneInput.trim())} placeholder="31, 82, 31000 ou Toulouse" aria-label="Départements, codes postaux ou commune" />
         </label>
         <label className="rd-period"><span>Période</span>
           <select value={days} onChange={(e) => setDays(+e.target.value)}>{PERIODS.map(([d, l]) => <option key={d} value={d}>{l}</option>)}</select>
@@ -200,10 +200,12 @@ export default function Radar({ pipeline, leads, onAdd, onOpen }: {
                             <span>{[it.form, `SIREN ${it.siren}`, it.capital ? `capital ${fmtEur(it.capital)}` : ""].filter(Boolean).join(" · ")}</span>
                             <span>{it.address}</span>
                           </div>
-                          <div>
-                            <small>{it.people.length > 1 ? "Dirigeants" : "Dirigeant"}</small>
-                            {it.people.length ? it.people.map((p) => <span key={p.name}><b>{p.name}</b>{p.role ? ` · ${p.role}` : ""}</span>) : <span>Non renseigné dans l'annonce</span>}
-                          </div>
+                          {it.people.length > 0 && (
+                            <div>
+                              <small>{it.people.length > 1 ? "Dirigeants" : "Dirigeant"}</small>
+                              {it.people.map((p) => <span key={p.name}><b>{p.name}</b>{p.role ? ` · ${p.role}` : ""}</span>)}
+                            </div>
+                          )}
                           <div>
                             <small>Calendrier</small>
                             {it.registered && <span>Immatriculée le <b>{fmtDay(it.registered)}</b></span>}
