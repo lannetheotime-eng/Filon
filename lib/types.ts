@@ -12,6 +12,11 @@ export type SiteAudit = {
   lastYear?: number;
   cms?: string; // WordPress, Wix, Shopify…
   cmsVersion?: string;
+  lastUpdate?: string; // dernière modification d'une page ou d'un article (API WordPress), AAAA-MM-JJ
+  php?: string; // version de PHP annoncée par le serveur
+  theme?: string; // thème WordPress
+  builder?: string; // constructeur de pages (Elementor, Divi…)
+  ms?: number; // temps de chargement de l'accueil, en millisecondes
 };
 
 export const PRESENCE_LABEL: Record<WebPresence, string> = {
@@ -51,6 +56,8 @@ export type Lead = {
   emailOthers?: string[]; // autres adresses trouvées
   emailChecked?: boolean; // recherche automatique déjà faite
   deep?: import("./deep-types").DeepAudit; // audit complet, lancé depuis la fiche
+  people?: { name: string; role?: string }[]; // dirigeants connus (annonce BODACC)
+  source?: "bodacc"; // trouvée par le radar des nouvelles entreprises (pas une fiche Google)
   score: number;
   foundAt: string;
 };

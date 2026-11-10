@@ -25,6 +25,26 @@ export function activity(created?: string) {
   };
 }
 
+// Site WordPress à refaire : ce que tu peux reprendre directement
+export const isWpRedo = (l: Lead) => l.presence === "vieux" && l.audit?.cms === "WordPress";
+
+// Les faits marquants de l'analyse, en une ligne courte : « WP 5.2 · PHP 7.4 · contenu de 2019 · Divi »
+export function siteSignals(l: Lead): string {
+  const a = l.audit;
+  if (!a || (l.presence !== "vieux" && l.presence !== "equipe")) return "";
+  const year = new Date().getFullYear();
+  const parts: string[] = [];
+  if (a.cms === "WordPress" && a.cmsVersion) parts.push(`WP ${a.cmsVersion}`);
+  if (a.php) parts.push(`PHP ${a.php}`);
+  const upd = a.lastUpdate ? Number(a.lastUpdate.slice(0, 4)) : undefined;
+  if (upd && upd <= year - 2) parts.push(`contenu de ${upd}`);
+  else if (!upd && a.lastYear && a.lastYear <= year - 3) parts.push(`© ${a.lastYear}`);
+  if (!a.mobile) parts.push("pas mobile");
+  if (!a.https) parts.push("sans HTTPS");
+  if (a.builder || a.theme) parts.push(a.builder || a.theme!);
+  return parts.join(" · ");
+}
+
 // Une seule étiquette qui résume la situation, pour la liste
 export function rowStatus(l: Lead): { label: string; tone: "none" | "social" | "old" | "ok" | "wp" } {
   const cms = l.audit?.cms;

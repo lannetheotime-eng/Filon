@@ -1084,3 +1084,50 @@ kbd { font-family: var(--data); font-size: 11.5px; background: var(--raise); bor
 .past > span { color: var(--ink-3); font-size: 12.5px; margin-right: 2px; }
 .past .chip b { font-family: var(--data); color: var(--mark-ink); margin-left: 4px; }
 .past .chip.on { background: var(--mark-soft); border-color: var(--mark); color: var(--ink); }
+
+/* ——— Sites WordPress à refaire ——— */
+.seg.wp b { color: var(--old); }
+.seg.wp::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--old); box-shadow: 0 0 10px var(--old); }
+.seg.wp[aria-selected="true"]::before { background: currentColor; box-shadow: none; }
+.sig { font-family: var(--data); font-size: 11.5px; letter-spacing: .01em; color: var(--old); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ——— Radar des nouvelles entreprises ——— */
+.rd-head { margin: 4px 0 20px; max-width: 780px; }
+.rd-eyebrow { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--mark-ink); border: 1px solid rgba(21,77,255,.55); border-radius: 999px; padding: 6px 14px; }
+.rd-eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--mark); box-shadow: 0 0 0 0 rgba(21,77,255,.7); animation: rd-ping 2.2s ease-out infinite; }
+@keyframes rd-ping { 0% { box-shadow: 0 0 0 0 rgba(21,77,255,.7); } 70% { box-shadow: 0 0 0 9px rgba(21,77,255,0); } 100% { box-shadow: 0 0 0 0 rgba(21,77,255,0); } }
+.rd-head h1 { font-size: clamp(32px, 4.4vw, 54px) !important; line-height: 1.02 !important; letter-spacing: -0.035em !important; margin-bottom: 12px !important; }
+.rd-head h1 em { font-style: normal; color: var(--mark); text-shadow: 0 0 40px rgba(21,77,255,.5); }
+.rd-head .hint { font-size: 15px; max-width: 62ch; color: var(--ink-2); }
+.rd-sectors { margin-bottom: 10px; }
+.rd-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 8px 8px 8px 8px; border: 1px solid var(--line); border-radius: 22px; background: rgba(15,15,17,.85); box-shadow: 0 30px 80px -30px rgba(21,77,255,.4); }
+.rd-bar label > span { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--mark-ink); margin-bottom: 2px; }
+.rd-zone, .rd-period { display: block; padding: 6px 14px; border-radius: 16px; }
+.rd-zone:focus-within, .rd-period:focus-within { background: var(--raise); }
+.rd-zone input, .rd-period select { border: 0; background: none; color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; padding: 0; outline: none; }
+.rd-zone input { width: 130px; font-family: var(--data); }
+.rd-period select option { background: var(--sheet); }
+.rd-bar .switch { font-size: 13.5px; }
+.rd-fresh { color: var(--mark-ink); }
+.rd-row { flex-wrap: wrap; }
+.row.rd-row { display: flex !important; flex-wrap: wrap; align-items: center; }
+.row.rd-row .row-main { flex: 1 1 0; min-width: 0; }
+.rd-score { font-family: var(--data) !important; font-size: 15px !important; }
+.rd-score.warm { color: var(--mark-ink); background: var(--mark-soft); border-color: rgba(21,77,255,.35); }
+.rd-score.hot { color: #fff; background: var(--mark); border-color: var(--mark); box-shadow: 0 0 22px -4px rgba(21,77,255,.8); }
+.rd-new { display: inline-block; vertical-align: 2px; margin-left: 8px; font-family: var(--data); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #fff; background: var(--mark); border-radius: 999px; padding: 2px 8px; }
+.pill.rd-creation { background: var(--mark-soft); color: var(--mark-ink); }
+.pill.rd-arrivee { background: rgba(255,255,255,.06); color: var(--ink-2); }
+.pill.rd-reprise { background: var(--old-soft); color: var(--old); }
+.rd-row .next b { color: var(--ink); font-weight: 600; }
+.rd-activity { margin: 0 0 10px; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; }
+@media (max-width: 900px) {
+  .rd-bar { border-radius: 18px; gap: 4px 14px; }
+  .rd-zone, .rd-period { flex: 1 1 40%; }
+  .rd-zone input { width: 100%; }
+  .rd-bar .switch { padding: 4px 10px; }
+  .rd-sectors { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .rd-sectors::-webkit-scrollbar { display: none; }
+  .rd-sectors .seg { flex: none; }
+}
+@media (prefers-reduced-motion: reduce) { .rd-eyebrow i { animation: none; } }

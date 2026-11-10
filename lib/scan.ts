@@ -448,7 +448,7 @@ function demoScan(city: ScanResult["city"], tradeId: string, includeOld = false,
       legalName: `${label.toUpperCase()} ${n.toUpperCase()} (démo)`,
       registry: "ok",
       audit: presence === "vieux"
-        ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017, cms: i % 8 === 1 ? "WordPress" : "Wix", cmsVersion: i % 8 === 1 ? "5.2" : undefined }
+        ? { score: 65, issues: ["Pas adapté aux téléphones", "Pas de connexion sécurisée (HTTPS)", "Pas mis à jour depuis 2017"], https: false, mobile: false, url: "http://exemple-demo.fr", email: "contact@exemple-demo.fr", lastYear: 2017, cms: i % 8 === 1 ? "WordPress" : "Wix", cmsVersion: i % 8 === 1 ? "5.2" : undefined, ...(i % 8 === 1 ? { php: "7.4", lastUpdate: "2019-03-12", builder: "Divi" } : {}) }
         : presence === "equipe"
         ? { score: 10, issues: [], https: true, mobile: true, url: "https://exemple-demo.fr", cms: "WordPress", cmsVersion: "6.7" }
         : undefined,

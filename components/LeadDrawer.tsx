@@ -389,7 +389,9 @@ export default function LeadDrawer({
               <summary>Créneau, dirigeant et préparation</summary>
               <p><b>{plan.slot.text}.</b> À éviter : {plan.avoid}.{plan.slot.known ? "" : " Horaires inconnus : vérifie sur sa fiche Google."}</p>
               <p>{plan.reasons.join(" ")} Plan B : {CHANNEL_LABEL[plan.secondary].toLowerCase()}.</p>
-              {dirs === null ? (
+              {lead.people?.length ? (
+                <p>Dirigeant : <b>{lead.people.slice(0, 2).map((x) => x.name).join(", ")}</b>{lead.people[0].role ? <span className="hint"> ({lead.people[0].role}{lead.legalName ? `, ${lead.legalName}` : ""}, annonce BODACC)</span> : null}</p>
+              ) : dirs === null ? (
                 <button className="btn ghost small" onClick={loadDirigeant} disabled={busy === "dir"}>{busy === "dir" ? "Recherche…" : "Trouver le dirigeant"}</button>
               ) : dirs.length ? (
                 <p>Dirigeant : <b>{dirs[0].people.slice(0, 2).map((x) => x.name).join(", ") || dirs[0].company}</b> <span className="hint">({dirs[0].company}, à vérifier)</span></p>
@@ -399,7 +401,7 @@ export default function LeadDrawer({
               <ul className="checklist">{plan.prep.map((x) => <li key={x}>{x}</li>)}</ul>
               <ol className="cadence">{plan.cadence.map((c) => <li key={c}>{c}</li>)}</ol>
             </details>
-            <details className="fold" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !details && busy !== "avis") loadReviews(); }}>
+            {lead.source !== "bodacc" && <details className="fold" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !details && busy !== "avis") loadReviews(); }}>
               <summary>Ce que disent ses clients</summary>
               {details?.reviews?.filter((x) => x.text).length ? (
                 <ul className="reviews">
@@ -412,7 +414,7 @@ export default function LeadDrawer({
                 </ul>
               ) : details ? <p className="hint">Aucun avis rédigé disponible.</p> : <p className="hint">{busy === "avis" ? "Chargement… (1 requête Google)" : "S'ouvre en chargeant ses avis (1 requête Google)."}</p>}
               {err && <p className="error">{err}</p>}
-            </details>
+            </details>}
           </section>
         )}
 

@@ -11,7 +11,8 @@ Outil de prospection : trouve les entreprises sans site web dans une ville, donn
 - **Script d'appel** en 4 temps + réponses aux 5 objections courantes, adaptés au métier.
 - **3 e-mails** (premier contact, relance J+3, dernière relance J+10) et **3 messages** (Instagram, LinkedIn, SMS après appel).
 - **Plan d'approche par entreprise** : canal, créneau croisé avec ses horaires, dirigeant (registre officiel), angle, arguments factuels, objections probables, cadence de relance.
-- **Sites à refaire** : audit automatique des sites existants et rapport partageable.
+- **Sites à refaire** : audit automatique des sites existants et rapport partageable. Pour WordPress : version (même quand la balise « generator » est masquée), date réelle de la dernière modification d'une page ou d'un article (API publique de WordPress, plus fiable que le © du pied de page), version de PHP obsolète, thème et constructeur de pages. Filtre « WordPress à refaire », du site le plus à l'abandon au moins urgent.
+- **Radar des nouvelles entreprises** : créations, arrivées et rachats de commerces publiés au BODACC, par secteur et par zone, avec le dirigeant, l'activité et la date d'ouverture. Gratuit, sans clé, aucune requête Google.
 - **Pipeline Kanban** (glisser-déposer) avec notes, date de relance et alerte des relances du jour, export CSV.
 - **Réglages** : prénom, studio, offre et prix utilisés dans tous les textes.
 
@@ -90,12 +91,26 @@ La prospection B2B par téléphone et e-mail est autorisée en France si l'offre
 app/page.tsx              interface (scan, pipeline, réglages)
 app/api/scan/route.ts     scan d'une ville
 app/api/details/route.ts  horaires et avis d'une entreprise
+app/api/radar/route.ts    radar des nouvelles entreprises (BODACC)
+lib/radar.ts              lecture et tri des annonces BODACC
+lib/site-signals.ts       signaux d'ancienneté d'un site (version WordPress, PHP, thème…)
 lib/scan.ts               géolocalisation, grille, Google Places, score
 lib/trades.ts             métiers, directions artistiques, effets signature
 lib/generators.ts         script, objections, e-mails, messages, prompt du site
 components/               carte, fiche entreprise, Kanban
 middleware.ts             protection par mot de passe
 ```
+
+## Radar des nouvelles entreprises (onglet « Radar »)
+
+Lit les annonces du BODACC (API ouverte de la DILA sur Opendatasoft, gratuite et sans clé) : créations et immatriculations, et ventes de fonds de commerce (un commerce racheté change souvent d'identité). Zone : un ou plusieurs départements (`31, 82`) ou codes postaux (`31000`). Secteurs : droit, professions libérales, commerces, artisans, services, ou tout.
+
+- Les termes du secteur sont cherchés dans l'activité déclarée et le nom de l'entreprise, puis chaque annonce est reclassée par son activité : une vente rédigée par un avocat ne remonte pas dans « Droit ».
+- Écartées d'office : SCI, holdings et sociétés sans activité, location meublée, livreurs et VTC, grandes franchises.
+- Note de potentiel sur 100 (métier, société ou entreprise individuelle, capital, enseigne, rachat, ouverture à venir), badge « Nouveau » depuis la visite d'un jour précédent, export CSV.
+- « + » ajoute l'entreprise au pipeline avec une note (date de parution, activité, ouverture, prix de rachat) ; la fiche reprend le dirigeant de l'annonce et propose le « Pack lancement ».
+
+Limite : le BODACC couvre les sociétés et commerçants inscrits au registre du commerce. Les avocats et professions libérales installés en nom propre n'y figurent pas (il faudrait l'API Sirene de l'INSEE, avec une clé gratuite).
 
 ## Cité : test de visibilité dans les IA (`/ia`)
 

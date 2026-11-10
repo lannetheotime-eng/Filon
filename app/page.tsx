@@ -8,20 +8,19 @@ import { DEFAULT_PROFILE, PRESENCE_LABEL, STAGES, FINAL_MAIL } from "../lib/type
 import { usePersistent, toCsv, download } from "../lib/store";
 import { mergeData, toSync, type SyncData } from "../lib/sync";
 import { detectNeeds, SERVICES, upcomingMoments } from "../lib/needs";
-import { activity, rowStatus } from "../lib/site";
+import { activity, rowStatus, isWpRedo, siteSignals } from "../lib/site";
 import LeadDrawer from "../components/LeadDrawer";
 import Board from "../components/Board";
 import Dashboard from "../components/Dashboard";
 import Today from "../components/Today";
 import Palette, { type PaletteItem } from "../components/Palette";
 import Toast from "../components/Toast";
-import Dirigeants from "../components/Dirigeants";
-import VenduLoue from "../components/VenduLoue";
-import { IconPeople, IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList, IconKey } from "../components/Icons";
+import Radar from "../components/Radar";
+import { IconToday, IconScan, IconBoard, IconStats, IconSettings, IconRoute, IconMap, IconList, IconRadar } from "../components/Icons";
 
 const MapView = dynamic(() => import("../components/MapView"), { ssr: false, loading: () => <div className="map" /> });
 
-type View = "scan" | "today" | "pipeline" | "dirigeants" | "loue" | "bilan" | "reglages";
+type View = "scan" | "radar" | "today" | "pipeline" | "bilan" | "reglages";
 type Recent = { city: string; tradeId: string; at: string };
 type Usage = { used: number; limit: number | null; today: number; dailyLimit: number };
 type Me = { mode: "simple" | "comptes"; user: { email: string; role: "admin" | "user" } | null; usage: Usage | null; google: boolean };
@@ -41,7 +40,7 @@ export default function Home() {
   const [artTrade, setArtTrade] = usePersistent("filon.artTrade", "art-deco");
   const tradeId = mode === "tableaux" ? artTrade : siteTrade;
   const setTradeId = (id: string) => { if (isArt(id)) { setMode("tableaux"); setArtTrade(id); } else { setMode("sites"); setSiteTrade(id); } };
-  const LIST = mode === "tableaux" ? ART_TRADES.filter((t) => !t.hidden) : TRADES;
+  const LIST = mode === "tableaux" ? ART_TRADES.filter((t) => !t.hidden) : TRADES.filter((t) => !t.hidden);
   const [artKind, setArtKind] = useState<"all" | "fit" | "insta">("all");
   const [city, setCity] = usePersistent("filon.city", "Toulouse");
   const [deep, setDeep] = usePersistent("filon.deep", false);
@@ -83,7 +82,7 @@ export default function Home() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [minRating, setMinRating] = useState(0);
   const [minReviews, setMinReviews] = useState(0);
-  const [kind, setKind] = useState<WebPresence | "all">("all");
+  const [kind, setKind] = useState<WebPresence | "all" | "wp">("all");
   const [mobileView, setMobileView] = useState<"list" | "map">("list");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -92,8 +91,8 @@ export default function Home() {
   const notify = useCallback((m: string) => setToast(m), []);
   const [step, setStep] = useState(0);
 
-  // L'ancien onglet « Dirigeants » de la recherche est devenu une vue à part
-  useEffect(() => { if (mode === "dirigeants") { setMode("sites"); setView("dirigeants"); } }, [mode, setMode]);
+  // L'ancien onglet « Dirigeants » a été retiré : retour à la recherche de sites
+  useEffect(() => { if (mode === "dirigeants") setMode("sites"); }, [mode, setMode]);
 
   // ⌘K / Ctrl+K : palette de commandes
   useEffect(() => {
@@ -372,8 +371,8 @@ export default function Home() {
   }
 
   const counts = useMemo(() => {
-    const c = { all: 0, aucun: 0, reseaux: 0, vieux: 0, equipe: 0 } as Record<WebPresence | "all", number>;
-    for (const l of result?.leads || []) { c.all++; c[l.presence]++; }
+    const c = { all: 0, aucun: 0, reseaux: 0, vieux: 0, equipe: 0, wp: 0 } as Record<WebPresence | "all" | "wp", number>;
+    for (const l of result?.leads || []) { c.all++; c[l.presence]++; if (isWpRedo(l)) c.wp++; }
     return c;
   }, [result]);
 
@@ -389,9 +388,11 @@ export default function Home() {
       (l) =>
         (l.rating || 0) >= minRating &&
         (l.reviews || 0) >= minReviews &&
-        (kind === "all" || l.presence === kind) &&
+        (kind === "all" || (kind === "wp" ? isWpRedo(l) : l.presence === kind)) &&
         (!wpOnly || l.audit?.cms === "WordPress" || !l.website)
     );
+    // WordPress à refaire : les sites les plus à l'abandon d'abord
+    if (kind === "wp") return [...list].sort((a, b) => (b.audit?.score || 0) - (a.audit?.score || 0) || b.score - a.score);
     // « Tout ce que j'ai trouvé » : classé par ville (les villes les plus fournies d'abord), puis par score
     if (result.city.zone === "cumul") {
       const n: Record<string, number> = {};
@@ -456,6 +457,13 @@ export default function Home() {
     notify(`${found} e-mail${found > 1 ? "s" : ""} trouvé${found > 1 ? "s" : ""}`);
   }
 
+  // Radar : une entreprise qui vient de naître (ou d'être rachetée) rejoint la mémoire et le pipeline
+  function addFromRadar(l: Lead, note: string) {
+    setLeads((prev) => ({ ...prev, [l.id]: prev[l.id] ? { ...l, ...prev[l.id] } : l }));
+    if (!pipeline[l.id]) updatePipeline(l.id, { stage: "a_contacter", notes: note });
+    notify(`${l.name} ajoutée au pipeline`);
+  }
+
   function addMany(ids: string[]) {
     const n = ids.filter((id) => !pipeline[id]).length;
     for (const id of ids) if (!pipeline[id]) updatePipeline(id, { stage: "a_contacter" });
@@ -474,6 +482,7 @@ export default function Home() {
       toCsv(shown.map((l) => ({
         Nom: l.name, Adresse: l.address, Téléphone: l.phone || "", "E-mail": l.audit?.email || "", Note: l.rating ?? "", Avis: l.reviews ?? "",
         Situation: PRESENCE_LABEL[l.presence], "Site actuel": l.website || "", "Défauts du site": (l.audit?.issues || []).join(" / "),
+        CMS: l.audit?.cms || "", "Version CMS": l.audit?.cmsVersion || "", PHP: l.audit?.php || "", "Dernière modification": l.audit?.lastUpdate || "", "Thème ou constructeur": l.audit?.builder || l.audit?.theme || "", "Score du site": l.audit?.score ?? "",
         Score: l.score, "Fiche Google": l.mapsUrl || "",
       })))
     );
@@ -485,10 +494,10 @@ export default function Home() {
   const selLeads = selected.map((id) => leads[id]).filter(Boolean);
 
   const paletteItems: PaletteItem[] = [
-    ...([["scan", "Chercher des clients"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["dirigeants", "Dirigeants et holdings"], ["loue", "Vendu loué"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
+    ...([["scan", "Chercher des clients"], ["radar", "Radar des nouvelles entreprises"], ["today", "Aujourd'hui"], ["pipeline", "Pipeline"], ["bilan", "Bilan"], ["reglages", "Réglages"]] as [View, string][]).map(([v, label]) => ({
       id: `v-${v}`, group: "Aller à", label, run: () => setView(v),
     })),
-    ...[...TRADES, ...ART_TRADES.filter((t) => !t.hidden)].map((t) => ({
+    ...[...TRADES, ...ART_TRADES].filter((t) => !t.hidden).map((t) => ({
       id: `t-${t.id}`, group: t.art ? "Chercher des lieux pour tes tableaux" : "Chercher des clients", label: `${t.label} à ${city || "…"}`, hint: "1 requête",
       run: () => { setView("scan"); setTradeId(t.id); runScan(city, t.id); },
     })),
@@ -499,8 +508,7 @@ export default function Home() {
     ...(result?.leads || []).filter((l) => !pipeline[l.id]).map((l) => ({
       id: `r-${l.id}`, group: "Dernière recherche", label: l.name, hint: rowStatus(l).label, run: () => { setView("scan"); setOpenId(l.id); },
     })),
-    { id: "a-dg", group: "Actions", label: "Dirigeants et holdings (registre)", hint: "gratuit", run: () => setView("dirigeants") },
-    { id: "a-loue", group: "Actions", label: "Vendu loué : biens vendus avec locataire", run: () => setView("loue") },
+    { id: "a-radar", group: "Actions", label: "Nouvelles entreprises et rachats de commerces", hint: "gratuit", run: () => setView("radar") },
     { id: "a-name", group: "Actions", label: "Chercher une entreprise précise par son nom", hint: "1 requête", run: () => { setView("scan"); setByName(true); } },
     { id: "a-save", group: "Actions", label: "Télécharger une sauvegarde", run: exportAll },
     { id: "a-prices", group: "Actions", label: "Régler mes tarifs", run: () => setView("reglages") },
@@ -508,10 +516,9 @@ export default function Home() {
 
   const NAV: [View, string, () => React.ReactElement][] = [
     ["scan", "Chercher", IconScan],
+    ["radar", "Radar", IconRadar],
     ["today", "Aujourd'hui", IconToday],
     ["pipeline", "Pipeline", IconBoard],
-    ["dirigeants", "Dirigeants", IconPeople],
-    ["loue", "Loué", IconKey],
     ["bilan", "Bilan", IconStats],
     ["reglages", "Réglages", IconSettings],
   ];
@@ -724,9 +731,9 @@ export default function Home() {
                   {artMode && ([["all", "Tous", result.leads.length], ["fit", "Forte identité", result.leads.filter((l) => fits[l.id]?.universe).length], ["insta", "Sur Instagram", result.leads.filter((l) => fits[l.id]?.insta).length]] as const).filter(([k, , n]) => k === "all" || n > 0).map(([k, label, n]) => (
                     <button key={k} role="tab" aria-selected={artKind === k} className="seg" onClick={() => setArtKind(k)}>{label} <b>{n}</b></button>
                   ))}
-                  {!artMode && (["all", "aucun", "reseaux", "vieux", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
-                    <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)}>
-                      {k === "all" ? "Tous" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
+                  {!artMode && (["all", "aucun", "reseaux", "vieux", "wp", "equipe"] as const).filter((k) => k === "all" || counts[k] > 0).map((k) => (
+                    <button key={k} role="tab" aria-selected={kind === k} className={`seg ${k}`} onClick={() => setKind(k)} title={k === "wp" ? "Sites WordPress à refaire, du plus à l'abandon au moins urgent" : undefined}>
+                      {k === "all" ? "Tous" : k === "wp" ? "WordPress à refaire" : PRESENCE_LABEL[k]} <b>{counts[k]}</b>
                     </button>
                   ))}
                 </div>
@@ -773,6 +780,7 @@ export default function Home() {
                         const inPipe = pipeline[l.id];
                         const isSel = selected.includes(l.id);
                         const rs = rowStatus(l);
+                        const sig = artMode ? "" : siteSignals(l);
                         const act = activity(l.created);
                         const fit = artMode ? fits[l.id] : null;
                         const top = artMode ? null : detectNeeds(l).find((n) => n.priority === 1 && !n.deadline) || detectNeeds(l).find((n) => !n.deadline && n.priority === 2);
@@ -798,6 +806,7 @@ export default function Home() {
                                   {act && <span>depuis {act.since}</span>}
                                   {(l.email || l.audit?.email) && <span className="mail-chip">✉ {l.email || l.audit?.email}</span>}
                                 </div>
+                                {sig && <div className="sig">{sig}</div>}
                                 {top && <div className="next">→ {top.title}</div>}
                                 {fit && <div className="next">→ Apporte : {seriesFor(l.tradeId)[0].name}</div>}
                               </div>
@@ -841,9 +850,7 @@ export default function Home() {
         </main>
       )}
 
-      {view === "dirigeants" && <main className="find"><Dirigeants canSpend={canSpend} spend={spend} notify={notify} live={live} /></main>}
-
-      {view === "loue" && <main className="find"><VenduLoue embedded /></main>}
+      {view === "radar" && <main className="find"><Radar pipeline={pipeline} leads={leads} onAdd={addFromRadar} onOpen={setOpenId} /></main>}
 
       {view === "today" && <Today leads={leads} pipeline={pipeline} profile={profile} onOpen={setOpenId} routeUrl={routeUrl} />}
 

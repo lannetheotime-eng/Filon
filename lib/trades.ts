@@ -264,6 +264,8 @@ export const TRADES: Trade[] = [
   { id: "demenageur", label: "Déménageurs", singular: "déménageur", query: "déménageur", hookDetail: "on compare les devis et les avis avant de confier ses affaires", effect: { name: "", description: "" }, sections: [], variants: [] },
   { id: "taxi", label: "Taxis et VTC", singular: "taxi", query: "taxi VTC", hookDetail: "les clients réservent leur trajet en ligne, surtout pour l'aéroport", effect: { name: "", description: "" }, sections: [], variants: [] },
   { id: "formation", label: "Organismes de formation", singular: "organisme de formation", query: "organisme de formation", hookDetail: "les entreprises cherchent une formation avec un programme clair", effect: { name: "", description: "" }, sections: [], variants: [] },
+  // Entreprises venues du radar (BODACC) dont l'activité ne correspond à aucun métier ci-dessus : absent des listes
+  { id: "entreprise", label: "Autres entreprises", singular: "entreprise", query: "entreprise", hookDetail: "une entreprise qui démarre est jugée sur son image dès ses premiers clients", effect: { name: "", description: "" }, sections: [], variants: [], hidden: true },
 ];
 
 // Lieux pour tes tableaux, au même format que les métiers (même scan, même pipeline)
